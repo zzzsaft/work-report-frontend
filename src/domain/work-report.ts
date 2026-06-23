@@ -55,6 +55,8 @@ export interface OperationAssignment {
   orderNo: string;
   productCode: string;
   productName: string;
+  partCode: string;
+  partName?: string;
   operationCode: string;
   operationName: string;
   operationNote: string;
@@ -62,6 +64,11 @@ export interface OperationAssignment {
   plannedStart: string;
   plannedEnd: string;
   collaborators: string[];
+  source: "assigned" | "self_claimed" | "leader_imported";
+  canWorkerRemove: boolean;
+  estimatedHours?: number;
+  claimedAt?: string;
+  assignedBy?: { id: string; name: string; role: "leader" | "admin" | "system" };
   status: OperationStatus;
   session?: WorkSession;
 }
@@ -89,6 +96,60 @@ export interface UserCapabilities {
   canViewAdmin: boolean;
   canAssignWorkers: boolean;
   canReviewExceptions: boolean;
+  canImportOperations: boolean;
+  canViewTeamOperations: boolean;
+  canForceRemoveAssignments: boolean;
+  canViewAllTeams: boolean;
+}
+
+export interface ClaimableProduct {
+  id: string;
+  orderNo: string;
+  productCode: string;
+  productName: string;
+  remainingQuantity: number;
+}
+
+export interface ClaimablePart {
+  id: string;
+  productId: string;
+  partCode: string;
+  partName: string;
+  operationCount: number;
+  remainingQuantity: number;
+}
+
+export interface ClaimableOperation {
+  id: string;
+  productId: string;
+  partId: string;
+  orderNo: string;
+  productCode: string;
+  productName: string;
+  partCode: string;
+  partName: string;
+  operationCode: string;
+  operationName: string;
+  operationNote: string;
+  plannedQuantity: number;
+  estimatedHours: number;
+  claimedWorkers: number;
+  status: "available" | "claimed" | "closed";
+}
+
+export interface LeaderImportDraft {
+  productCode: string;
+  partCode: string;
+  operationCode: string;
+  operationName: string;
+  quantity: number;
+  estimatedHours: number;
+}
+
+export interface LeaderImportResult {
+  accepted: number;
+  rejected: number;
+  errors: Array<{ row: number; message: string }>;
 }
 
 export interface DashboardSummary {
@@ -168,6 +229,40 @@ export function getPendingAssignmentsForDate(
       isActiveOperationStatus(assignment.status) &&
       isAssignmentOnDate(assignment, date),
   );
+}
+
+export function getSwitchableAssignmentsForDate(
+  assignments: OperationAssignment[],
+  date: Date | string | number,
+  excludeId?: string,
+) {
+  return assignments.filter(
+    (assignment) =>
+      assignment.id !== excludeId &&
+      assignment.status === "assigned" &&
+      isAssignmentOnDate(assignment, date),
+  );
+}
+
+export function getCurrentSwitchCandidatesForDate(
+  assignments: OperationAssignment[],
+  date: Date | string | number,
+  excludeId?: string,
+) {
+  return assignments.filter(
+    (assignment) =>
+      assignment.id !== excludeId &&
+      (assignment.status === "assigned" || assignment.status === "paused") &&
+      isAssignmentOnDate(assignment, date),
+  );
+}
+
+export function canSwitchFromAssignment(assignment?: OperationAssignment | null) {
+  return !assignment || assignment.status === "assigned" || assignment.status === "paused";
+}
+
+export function canWorkerRemoveAssignment(assignment: OperationAssignment) {
+  return assignment.source === "self_claimed" && assignment.status === "assigned" && assignment.canWorkerRemove;
 }
 
 export function getSessionElapsedSeconds(session?: WorkSession, now = Date.now()) {

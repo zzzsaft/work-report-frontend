@@ -34,6 +34,7 @@ export const parseLoginState = (state: string | null) => {
 interface WeComLoginPanelOptions {
   element: Element;
   state: string;
+  redirectUri: string;
   onSuccess: (code: string) => void;
   onFail: (error: WWLoginErrorResp) => void;
 }
@@ -41,6 +42,7 @@ interface WeComLoginPanelOptions {
 export const mountWeComLoginPanel = ({
   element,
   state,
+  redirectUri,
   onSuccess,
   onFail,
 }: WeComLoginPanelOptions): WWLoginInstance => {
@@ -52,7 +54,7 @@ export const mountWeComLoginPanel = ({
       login_type: WWLoginType.corpApp,
       appid: corpId,
       agentid: agentId,
-      redirect_uri: `${window.location.origin}/auth-callback`,
+      redirect_uri: redirectUri,
       redirect_type: WWLoginRedirectType.callback,
       panel_size: WWLoginPanelSizeType.small,
       state,

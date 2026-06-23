@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode 
 import {
   Box, CalendarClock, Camera, CheckCircle2, ChevronRight, CircleAlert, ClipboardList,
   Clock3, FileText, Hash, LogOut, MessageSquareText, PackageCheck, Pause, Play, RefreshCw,
-  RotateCcw, Target, UsersRound, X,
+  RotateCcw, Search, Target, Trash2, UsersRound, X,
 } from "lucide-react";
 import { useLogout } from "@/hooks/useLogout";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
-import { formatDuration, getSessionElapsedSeconds, statusLabel, type OperationAssignment } from "@/domain/work-report";
-import { createImagePreviews, fileToDataUrl, revokeImagePreviews, selectImageFiles, type ImagePreview } from "@/utils/imageFiles";
+import { canSwitchFromAssignment, canWorkerRemoveAssignment, formatDuration, getSessionElapsedSeconds, statusLabel, type ClaimableOperation, type ClaimablePart, type ClaimableProduct, type OperationAssignment } from "@/domain/work-report";
+import { createImagePreviews, filesToCompletionPhotos, revokeImagePreviews, selectImageFiles, type ImagePreview } from "@/utils/imageFiles";
 import { getErrorMessage } from "@/utils/errors";
 
 function LoadingState() { return <div className="page-state"><span className="spinner" /><p>正在加载报工数据...</p></div>; }
@@ -16,6 +16,16 @@ function ErrorBanner({ message, retry }: { message: string; retry?: () => void }
 function StatusPill({ status }: { status: OperationAssignment["status"] }) {
   return <span className={`status-pill status-${status}`}><span />{statusLabel[status]}</span>;
 }
+
+type HistoryRange = "7" | "30" | "60" | "all";
+const historyRangeOptions: Array<[HistoryRange, string]> = [["7", "近7天"], ["30", "近30天"], ["60", "近60天"], ["all", "全部"]];
+const historyPageSize = 5;
+const getAssignmentTime = (item: OperationAssignment) => new Date(item.session?.completedAt || item.plannedStart).getTime();
+const isInHistoryRange = (item: OperationAssignment, range: HistoryRange) => {
+  if (range === "all") return true;
+  const cutoff = Date.now() - Number(range) * 24 * 3600_000;
+  return getAssignmentTime(item) >= cutoff;
+};
 
 function BottomSheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return <div className="sheet-backdrop" role="presentation" onMouseDown={onClose}>
@@ -26,7 +36,7 @@ function BottomSheet({ title, children, onClose }: { title: string; children: Re
 }
 
 export function CurrentOperationPage() {
-  const { current, nextCandidates, dayCompleted, currentLoading, actionLoading, error, loadCurrent, start, pause, resume, complete, selectNext, clearError } = useWorkReportStore();
+  const { current, nextCandidates, switchCandidates, dayCompleted, currentLoading, actionLoading, error, loadCurrent, start, pause, resume, complete, selectNext, switchCurrent, clearError } = useWorkReportStore();
   const [tick, setTick] = useState(Date.now());
   const [showNote, setShowNote] = useState(false);
   const [showPause, setShowPause] = useState(false);
@@ -37,9 +47,10 @@ export function CurrentOperationPage() {
   useEffect(() => { if (nextCandidates.length > 1) setShowNext(true); }, [nextCandidates]);
   const elapsed = useMemo(() => formatDuration(getSessionElapsedSeconds(current?.session, tick)), [current?.session, tick]);
   if (currentLoading && !current) return <LoadingState />;
-  if (!current) return dayCompleted ? <DayCompletedPage onRefresh={() => void loadCurrent()} /> : <div className="empty-state"><PackageCheck /><h1>当前没有待报工工序</h1><p>新的工序分配后会显示在这里。</p><button className="primary-button" onClick={() => void loadCurrent()}><RefreshCw />刷新工序</button></div>;
+  if (!current) return dayCompleted ? <DayCompletedPage onRefresh={() => void loadCurrent()} /> : <NoCurrentOperationPage candidates={switchCandidates} onRefresh={() => void loadCurrent()} onSelect={(assignment) => void switchCurrent(assignment)} loading={actionLoading} />;
   const primary = current.status === "completed" && nextCandidates.length > 0 ? { text: "选择下一工序", icon: ClipboardList, action: () => setShowNext(true) } : current.status === "assigned" ? { text: "开始作业", icon: Play, action: () => void start() } : current.status === "paused" ? { text: "恢复作业", icon: RotateCcw, action: () => void resume() } : { text: "暂停作业", icon: Pause, action: () => setShowPause(true) };
   const PrimaryIcon = primary.icon;
+  const canSwitch = canSwitchFromAssignment(current) && switchCandidates.length > 0;
   return <div className="current-page">
     <header className="worker-header"><div className="worker-avatar">张</div><div><strong>张师傅</strong><span>白班（08:00-20:00）</span></div><StatusPill status={current.status} /></header>
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadCurrent(); }} />}
@@ -47,6 +58,7 @@ export function CurrentOperationPage() {
       <InfoRow icon={ClipboardList} label="工单号" value={current.orderNo} strong />
       <InfoRow icon={Box} label="产品名称" value={current.productName} strong />
       <InfoRow icon={Hash} label="产品编号" value={current.productCode} />
+      <InfoRow icon={PackageCheck} label="部件编号" value={current.partCode} />
       <div className="info-row operation-row"><div className="info-icon"><Target /></div><div className="info-copy"><span>当前工序</span><strong>{current.operationName}</strong><button className="note-button" onClick={() => setShowNote(true)}><MessageSquareText />查看工序备注<ChevronRight /></button></div></div>
       <InfoRow icon={PackageCheck} label="计划数量" value={`${current.plannedQuantity} 件`} strong />
       <InfoRow icon={UsersRound} label="协作人员" value={current.collaborators.join(" / ")} />
@@ -54,21 +66,27 @@ export function CurrentOperationPage() {
     </section>
     <div className="action-dock">
       <button className="primary-action" disabled={actionLoading} onClick={primary.action}><PrimaryIcon />{actionLoading ? "正在处理..." : primary.text}</button>
+      {canSwitch && <button className="secondary-action switch-action" disabled={actionLoading} onClick={() => setShowNext(true)}><ClipboardList />切换工序</button>}
       {current.status !== "assigned" && current.status !== "completed" && <button className="secondary-action" disabled={actionLoading} onClick={() => setShowComplete(true)}><Camera />结束并拍照</button>}
     </div>
     {showNote && <BottomSheet title="工序备注" onClose={() => setShowNote(false)}><div className="note-content"><FileText /><p>{current.operationNote}</p></div><button className="primary-button" onClick={() => setShowNote(false)}>我知道了</button></BottomSheet>}
     {showPause && <PauseSheet onClose={() => setShowPause(false)} onConfirm={async (reason) => { await pause(reason); setShowPause(false); }} loading={actionLoading} />}
     {showComplete && <CompleteSheet onClose={() => setShowComplete(false)} loading={actionLoading} onConfirm={async (input) => { await complete(input); setShowComplete(false); }} />}
-    {showNext && nextCandidates.length > 0 && <NextOperationSheet candidates={nextCandidates} onClose={() => setShowNext(false)} onSelect={(assignment) => { selectNext(assignment); setShowNext(false); }} />}
+    {showNext && (nextCandidates.length > 0 || switchCandidates.length > 0) && <NextOperationSheet title={nextCandidates.length > 0 ? "选择下一工序" : "切换工序"} help={nextCandidates.length > 0 ? `今日还有 ${nextCandidates.length} 道未完成工序，请选择接下来要做的工序。` : "当前工序已暂停或尚未开始，可以切换到其他待开始工序。"} candidates={nextCandidates.length > 0 ? nextCandidates : switchCandidates} onClose={() => setShowNext(false)} onSelect={(assignment) => { if (nextCandidates.length > 0) selectNext(assignment); else void switchCurrent(assignment); setShowNext(false); }} />}
   </div>;
+}
+
+function NoCurrentOperationPage({ candidates, onRefresh, onSelect, loading }: { candidates: OperationAssignment[]; onRefresh: () => void; onSelect: (assignment: OperationAssignment) => void; loading: boolean }) {
+  if (!candidates.length) return <div className="empty-state"><PackageCheck /><h1>当前没有待报工工序</h1><p>新的工序分配或领取后会显示在这里。</p><button className="primary-button" onClick={onRefresh}><RefreshCw />刷新工序</button></div>;
+  return <div className="standard-page no-current-page"><PageHeader title="选择工序开始" subtitle="当前没有正在进行的工序，请先选择一道待开始工序" /><div className="next-operation-list">{candidates.map((item) => <button key={item.id} disabled={loading} onClick={() => onSelect(item)}><div><span>{item.orderNo}</span><em>{item.source === "self_claimed" ? "自主领取" : "后台分配"}</em></div><strong>{item.operationName}</strong><p>{item.productName} · {item.productCode}</p><p>{item.partName || item.partCode} · {item.partCode}</p><small><UsersRound />{item.collaborators.join(" / ")}</small><ChevronRight /></button>)}</div><button className="ghost-button refresh-wide" onClick={onRefresh}><RefreshCw />刷新工序</button></div>;
 }
 
 function DayCompletedPage({ onRefresh }: { onRefresh: () => void }) {
   return <div className="day-completed"><div className="completion-check"><CheckCircle2 /></div><h1>今日工序已全部完成</h1><p>辛苦了！今天安排的报工任务均已完成。</p><div className="completion-summary"><span>完成状态</span><strong>全部完成</strong></div><button className="ghost-button" onClick={onRefresh}><RefreshCw />刷新工序</button></div>;
 }
 
-function NextOperationSheet({ candidates, onClose, onSelect }: { candidates: OperationAssignment[]; onClose: () => void; onSelect: (assignment: OperationAssignment) => void }) {
-  return <BottomSheet title="选择下一工序" onClose={onClose}><p className="sheet-help">今日还有 {candidates.length} 道未完成工序，请选择接下来要做的工序。</p><div className="next-operation-list">{candidates.map((item) => <button key={item.id} onClick={() => onSelect(item)}><div><span>{item.orderNo}</span><em>{new Date(item.plannedStart).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</em></div><strong>{item.operationName}</strong><p>{item.productName} · {item.productCode}</p><small><UsersRound />{item.collaborators.join(" / ")}</small><ChevronRight /></button>)}</div></BottomSheet>;
+function NextOperationSheet({ title, help, candidates, onClose, onSelect }: { title: string; help: string; candidates: OperationAssignment[]; onClose: () => void; onSelect: (assignment: OperationAssignment) => void }) {
+  return <BottomSheet title={title} onClose={onClose}><p className="sheet-help">{help}</p><div className="next-operation-list">{candidates.map((item) => <button key={item.id} onClick={() => onSelect(item)}><div><span>{item.orderNo}</span><em>{new Date(item.plannedStart).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</em></div><strong>{item.operationName}</strong><p>{item.productName} · {item.productCode}</p><p>{item.partName || item.partCode} · {item.partCode}</p><small><UsersRound />{item.collaborators.join(" / ")}</small><small className="operation-elapsed"><Clock3 />已用时长 {formatDuration(getSessionElapsedSeconds(item.session))}</small><ChevronRight /></button>)}</div></BottomSheet>;
 }
 
 function InfoRow({ icon: Icon, label, value, strong, timer }: { icon: typeof Box; label: string; value: string; strong?: boolean; timer?: boolean }) {
@@ -88,8 +106,12 @@ function CompleteSheet({ onClose, onConfirm, loading }: { onClose: () => void; o
   const [quantity, setQuantity] = useState("");
   const [note, setNote] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
   useEffect(() => { photosRef.current = photos; }, [photos]);
-  useEffect(() => () => revokeImagePreviews(photosRef.current), []);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    revokeImagePreviews(photosRef.current);
+  }, []);
   const onFiles = (event: ChangeEvent<HTMLInputElement>) => {
     const result = selectImageFiles(event.target.files || [], photos.length);
     setPhotos((items) => [...items, ...createImagePreviews(result.accepted)]);
@@ -102,32 +124,81 @@ function CompleteSheet({ onClose, onConfirm, loading }: { onClose: () => void; o
     return items.filter((_, itemIndex) => itemIndex !== index);
   });
   const submit = async () => {
+    if (!photos.length || preparing || loading) return;
     setPreparing(true);
+    setFileError("");
     try {
-      const encoded = await Promise.all(photos.map(async ({ file }) => ({ name: file.name, url: await fileToDataUrl(file) })));
+      const encoded = await filesToCompletionPhotos(photos.map(({ file }) => file));
       await onConfirm({ photos: encoded, completedQuantity: quantity ? Number(quantity) : undefined, note: note || undefined });
     } catch (error) {
-      setFileError(getErrorMessage(error));
+      if (mountedRef.current) setFileError(getErrorMessage(error));
     } finally {
-      setPreparing(false);
+      if (mountedRef.current) setPreparing(false);
     }
   };
   return <BottomSheet title="完成报工" onClose={onClose}><div className="completion-step"><div className="step-title"><span>1</span><strong>拍摄完工照片</strong><em>必填</em></div><input ref={fileRef} hidden type="file" accept="image/*" capture="environment" multiple onChange={onFiles} /><button className="photo-picker" onClick={() => fileRef.current?.click()}><Camera /><span>{photos.length ? "继续添加照片" : "拍照或选择照片"}</span></button>{photos.length > 0 && <div className="photo-grid">{photos.map((photo, index) => <div key={photo.previewUrl}><img src={photo.previewUrl} alt={`完工照片 ${index + 1}`} /><button aria-label="删除照片" onClick={() => removePhoto(index)}><X /></button></div>)}</div>}{fileError && <p className="validation-hint">{fileError}</p>}</div><div className="completion-step"><div className="step-title"><span>2</span><strong>补充完工信息</strong><small>选填</small></div><label className="field-label">本次完成数量<input inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ""))} placeholder="请输入数量" /></label><label className="field-label">备注<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="填写异常、质量或交接说明" rows={3} /></label></div><button className="primary-button submit-completion" disabled={!photos.length || loading || preparing} onClick={() => void submit()}><CheckCircle2 />{loading || preparing ? "正在提交..." : "确认完成报工"}</button>{!photos.length && <p className="validation-hint">请至少添加一张完工照片</p>}</BottomSheet>;
 }
 
 export function OperationsPage() {
-  const { assignments, assignmentsLoading, loadAssignments } = useWorkReportStore();
-  const [tab, setTab] = useState<"history" | "current" | "future">("current");
+  const {
+    assignments, assignmentsLoading, actionLoading, claimLoading, claimProducts, claimParts, claimOperations, error,
+    loadAssignments, removeClaimedAssignment, searchClaimableProducts, loadClaimableParts, loadClaimableOperations, claimOperation, switchCurrent, clearError,
+  } = useWorkReportStore();
+  const [tab, setTab] = useState<"history" | "current" | "future" | "claim">("current");
+  const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
+  const [historyRange, setHistoryRange] = useState<HistoryRange>("30");
+  const [historyLimit, setHistoryLimit] = useState(historyPageSize);
   useEffect(() => { void loadAssignments(); }, [loadAssignments]);
-  const filtered = assignments.filter((item) => tab === "history" ? item.status === "completed" : tab === "future" ? item.status === "assigned" : ["running", "paused", "pending_submit"].includes(item.status));
-  return <div className="standard-page"><PageHeader title="工序清单" subtitle="查看历史、当前和未来任务" /><div className="segmented">{([['history','历史'],['current','当前'],['future','未来']] as const).map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</div>{assignmentsLoading ? <LoadingState /> : <div className="operation-list">{filtered.map((item) => <article key={item.id} className="operation-card"><div><StatusPill status={item.status} /><span className="order-number">{item.orderNo}</span></div><h2>{item.operationName}</h2><p>{item.productName} · {item.productCode}</p><dl><div><dt>计划数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>计划时间</dt><dd>{new Date(item.plannedStart).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</dd></div></dl></article>)}</div>}</div>;
+  useEffect(() => { setHistoryLimit(historyPageSize); }, [historyRange, tab]);
+  const historyItems = useMemo(() => assignments.filter((item) => item.status === "completed" && isInHistoryRange(item, historyRange)).sort((a, b) => getAssignmentTime(b) - getAssignmentTime(a)), [assignments, historyRange]);
+  const filtered = tab === "history" ? historyItems.slice(0, historyLimit) : assignments.filter((item) => tab === "future" ? item.status === "assigned" : ["running", "paused", "pending_submit"].includes(item.status));
+  const hasMoreHistory = tab === "history" && historyItems.length > historyLimit;
+  return <div className="standard-page"><PageHeader title="工序清单" subtitle="查看、领取和切换个人工序" />{error && <ErrorBanner message={error} retry={() => { clearError(); void loadAssignments(); }} />}<div className="segmented segmented-four">{([['history','历史'],['current','当前'],['future','未来'],['claim','领取']] as const).map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</div>{tab === "claim" ? <ClaimOperationsPanel loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); }} onGoStart={async (assignment) => { await switchCurrent(assignment); setTab("current"); }} onContinue={() => setClaimed(null)} /> : assignmentsLoading ? <LoadingState /> : <><div className="operation-list">{tab === "history" && <HistoryFilter range={historyRange} total={historyItems.length} onChange={setHistoryRange} />}{filtered.map((item) => <OperationCard key={item.id} item={item} removing={actionLoading} onRemove={() => void removeClaimedAssignment(item.id)} />)}{!filtered.length && <div className="empty-inline">暂无{tab === "history" ? "历史" : tab === "future" ? "未来" : "当前"}工序</div>}</div>{hasMoreHistory && <button className="load-more-button" onClick={() => setHistoryLimit((value) => value + historyPageSize)}>加载更多历史数据</button>}</>}</div>;
+}
+
+function HistoryFilter({ range, total, onChange }: { range: HistoryRange; total: number; onChange: (range: HistoryRange) => void }) {
+  return <section className="history-filter" aria-label="历史工序时间筛选"><div><strong>历史时间</strong><span>共 {total} 条</span></div><div>{historyRangeOptions.map(([key, label]) => <button key={key} className={range === key ? "active" : ""} onClick={() => onChange(key)}>{label}</button>)}</div></section>;
+}
+
+function OperationCard({ item, removing, onRemove }: { item: OperationAssignment; removing: boolean; onRemove: () => void }) {
+  return <article className="operation-card"><div><StatusPill status={item.status} /><span className="order-number">{item.orderNo}</span></div><h2>{item.operationName}</h2><p>{item.productName} · {item.productCode}</p><p>{item.partName || item.partCode} · {item.partCode}</p><div className="assignment-source"><span>{item.source === "self_claimed" ? "自主领取" : item.source === "leader_imported" ? "小组长导入" : "后台分配"}</span>{item.assignedBy && <small>{item.assignedBy.name}</small>}</div><dl><div><dt>计划数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>计划工时</dt><dd>{item.estimatedHours ? `${item.estimatedHours} 小时` : "未填写"}</dd></div></dl>{canWorkerRemoveAssignment(item) ? <button className="remove-claim-button" disabled={removing} onClick={onRemove}><Trash2 />删除领取</button> : item.source === "self_claimed" && <p className="locked-claim">已开始的自领工序需由后台删除</p>}</article>;
+}
+
+function ClaimOperationsPanel({
+  loading, products, parts, operations, claimed, onSearch, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue,
+}: {
+  loading: boolean;
+  products: ClaimableProduct[];
+  parts: ClaimablePart[];
+  operations: ClaimableOperation[];
+  claimed: OperationAssignment | null;
+  onSearch: (keyword: string) => Promise<void>;
+  onLoadParts: (productId: string) => Promise<void>;
+  onLoadOperations: (partId: string) => Promise<void>;
+  onClaim: (operationId: string) => Promise<void>;
+  onGoStart: (assignment: OperationAssignment) => Promise<void>;
+  onContinue: () => void;
+}) {
+  const [keyword, setKeyword] = useState("CP-JSJ-240623-07");
+  const [selectedProduct, setSelectedProduct] = useState<ClaimableProduct | null>(null);
+  const [selectedPart, setSelectedPart] = useState<ClaimablePart | null>(null);
+  const search = async () => {
+    setSelectedProduct(null);
+    setSelectedPart(null);
+    await onSearch(keyword);
+  };
+  if (claimed) return <section className="claim-success"><CheckCircle2 /><h2>已加入工序清单</h2><p>{claimed.productCode} · {claimed.partCode}</p><strong>{claimed.operationName}</strong><div><button className="primary-button" onClick={() => void onGoStart(claimed)}><Play />去开始</button><button className="ghost-button" onClick={onContinue}>继续领取</button></div></section>;
+  return <section className="claim-panel"><label className="claim-search"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入产品编号搜索" /><button disabled={loading || !keyword.trim()} onClick={() => void search()}>搜索</button></label><p className="claim-help">先搜产品编号，再选部件编号，最后领取具体工序。</p>{loading && <div className="claim-loading"><span className="spinner" />正在读取...</div>}<div className="claim-columns"><div><h2>1 产品编号</h2>{products.map((item) => <button key={item.id} className={selectedProduct?.id === item.id ? "selected" : ""} onClick={() => { setSelectedProduct(item); setSelectedPart(null); void onLoadParts(item.id); }}><strong>{item.productCode}</strong><span>{item.productName}</span><small>{item.orderNo} · 剩余 {item.remainingQuantity} 件</small></button>)}</div><div><h2>2 部件编号</h2>{parts.map((item) => <button key={item.id} className={selectedPart?.id === item.id ? "selected" : ""} onClick={() => { setSelectedPart(item); void onLoadOperations(item.id); }}><strong>{item.partCode}</strong><span>{item.partName}</span><small>{item.operationCount} 道工序 · 剩余 {item.remainingQuantity} 件</small></button>)}</div></div><div className="claim-operation-list"><h2>3 可领取工序</h2>{operations.map((item) => <article key={item.id}><div><strong>{item.operationCode} · {item.operationName}</strong><span>{item.status === "available" ? "可领取" : "不可领取"}</span></div><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.claimedWorkers} 人</dd></div></dl><button className="primary-button" disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>领取工序</button></article>)}{!operations.length && <div className="empty-inline">请选择部件查看工序</div>}</div></section>;
 }
 
 export function StatsPage() {
   const { statistics, statisticsLoading, loadStatistics } = useWorkReportStore();
   const [period, setPeriod] = useState<"day" | "week" | "month">("week");
   useEffect(() => { void loadStatistics(period); }, [loadStatistics, period]);
-  return <div className="standard-page"><PageHeader title="我的统计" subtitle="工时、出勤与加班一目了然" /><div className="segmented">{([['day','今日'],['week','本周'],['month','本月']] as const).map(([key,label]) => <button key={key} className={period===key?'active':''} onClick={()=>setPeriod(key)}>{label}</button>)}</div>{statisticsLoading || !statistics ? <LoadingState /> : <><section className="stat-hero"><span>累计工时</span><strong>{statistics.totalHours.toFixed(1)}</strong><em>小时</em></section><div className="metric-grid"><Metric icon={Clock3} label="正常工时" value={`${statistics.regularHours.toFixed(1)} 小时`} /><Metric icon={CalendarClock} label="加班工时" value={`${statistics.overtimeHours.toFixed(1)} 小时`} tone="warning" /><Metric icon={CheckCircle2} label="完成工序" value={`${statistics.completedOperations} 道`} /><Metric icon={CalendarClock} label="出勤天数" value={`${statistics.attendanceDays} 天`} /></div><section className="trend-list"><div className="trend-heading"><h2>每日工时</h2><div className="trend-legend" aria-label="工时图例"><span><i className="regular" />正常</span><span><i className="overtime" />加班</span></div></div>{statistics.trend.map((item) => { const regular = Math.max(0, item.hours - item.overtime); return <div className="trend-row" key={item.label}><span>{item.label}</span><div className="stacked-hours" aria-label={`${item.label}正常工时 ${regular} 小时，加班 ${item.overtime} 小时`}><i className="regular-hours" style={{ width: `${Math.min(regular / 10 * 100, 100)}%` }} /><i className="overtime-hours" style={{ width: `${Math.min(item.overtime / 10 * 100, 100)}%` }} /></div><div className="trend-value"><strong>{item.hours}h</strong>{item.overtime > 0 && <small>加班 {item.overtime}h</small>}</div></div>})}</section></>}</div>;
+  const maxTrendHours = Math.max(10, ...(statistics?.trend.map((item) => item.hours) || []));
+  const trendTitle = period === "month" ? "每周工时" : "每日工时";
+  const trendSubtitle = period === "month" ? "最近2个月" : "本周";
+  return <div className="standard-page"><PageHeader title="我的统计" subtitle="工时、出勤与加班一目了然" /><div className="segmented">{([['day','今日'],['week','本周'],['month','本月']] as const).map(([key,label]) => <button key={key} className={period===key?'active':''} onClick={()=>setPeriod(key)}>{label}</button>)}</div>{statisticsLoading || !statistics ? <LoadingState /> : <><section className="stat-hero"><span>累计工时</span><strong>{statistics.totalHours.toFixed(1)}</strong><em>小时</em></section><div className="metric-grid"><Metric icon={Clock3} label="正常工时" value={`${statistics.regularHours.toFixed(1)} 小时`} /><Metric icon={CalendarClock} label="加班工时" value={`${statistics.overtimeHours.toFixed(1)} 小时`} tone="warning" /><Metric icon={CheckCircle2} label="完成工序" value={`${statistics.completedOperations} 道`} /><Metric icon={CalendarClock} label="出勤天数" value={`${statistics.attendanceDays} 天`} /></div>{period === "day" ? <section className="today-stat-note"><Clock3 /><div><strong>今日统计只显示汇总</strong><p>每日工时图在“本周”中查看，本月按周汇总展示最近2个月。</p></div></section> : <section className="trend-list"><div className="trend-heading"><div><h2>{trendTitle}</h2><p>{trendSubtitle}</p></div><div className="trend-legend" aria-label="工时图例"><span><i className="regular" />正常</span><span><i className="overtime" />加班</span></div></div>{statistics.trend.map((item) => { const regular = Math.max(0, item.hours - item.overtime); return <div className="trend-row" key={item.label}><span>{item.label}</span><div className="stacked-hours" aria-label={`${item.label}正常工时 ${regular} 小时，加班 ${item.overtime} 小时`}><i className="regular-hours" style={{ width: `${Math.min(regular / maxTrendHours * 100, 100)}%` }} /><i className="overtime-hours" style={{ width: `${Math.min(item.overtime / maxTrendHours * 100, 100)}%` }} /></div><div className="trend-value"><strong>{item.hours}h</strong>{item.overtime > 0 && <small>加班 {item.overtime}h</small>}</div></div>})}</section>}</>}</div>;
 }
 
 function Metric({ icon: Icon, label, value, tone }: { icon: typeof Clock3; label: string; value: string; tone?: string }) { return <article className={`metric-card ${tone || ""}`}><Icon /><span>{label}</span><strong>{value}</strong></article>; }

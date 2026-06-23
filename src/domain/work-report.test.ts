@@ -4,6 +4,10 @@ import {
   getLocalDateKey,
   getPendingAssignmentsForDate,
   getSessionElapsedSeconds,
+  getSwitchableAssignmentsForDate,
+  getCurrentSwitchCandidatesForDate,
+  canSwitchFromAssignment,
+  canWorkerRemoveAssignment,
   isActiveOperationStatus,
   isAssignmentOnDate,
   type OperationAssignment,
@@ -17,9 +21,10 @@ const session = (overrides: Partial<WorkSession> = {}): WorkSession => ({
 
 const assignment = (overrides: Partial<OperationAssignment> = {}): OperationAssignment => ({
   id: "a1", workOrderId: "o1", orderNo: "WO-1", productCode: "P-1", productName: "产品",
+  partCode: "PART-1", partName: "部件",
   operationCode: "OP-1", operationName: "工序", operationNote: "", plannedQuantity: 1,
   plannedStart: "2026-06-23T08:00:00+08:00", plannedEnd: "2026-06-23T09:00:00+08:00",
-  collaborators: [], status: "assigned", ...overrides,
+  collaborators: [], source: "assigned", canWorkerRemove: false, status: "assigned", ...overrides,
 });
 
 describe("assignment date and status selectors", () => {
@@ -38,6 +43,31 @@ describe("assignment date and status selectors", () => {
     expect(isActiveOperationStatus("completed")).toBe(false);
     const assignments = [assignment(), assignment({ id: "a2", status: "running" }), assignment({ id: "a3", status: "completed" })];
     expect(getPendingAssignmentsForDate(assignments, new Date(2026, 5, 23), "a1").map((item) => item.id)).toEqual(["a2"]);
+  });
+
+  it("allows switching only to assigned operations for the day", () => {
+    const assignments = [assignment(), assignment({ id: "a2", status: "paused" }), assignment({ id: "a3", status: "completed" })];
+    expect(getSwitchableAssignmentsForDate(assignments, new Date(2026, 5, 23)).map((item) => item.id)).toEqual(["a1"]);
+    expect(canSwitchFromAssignment(assignment({ status: "paused" }))).toBe(true);
+    expect(canSwitchFromAssignment(assignment({ status: "assigned" }))).toBe(true);
+    expect(canSwitchFromAssignment(assignment({ status: "running" }))).toBe(false);
+    expect(canSwitchFromAssignment(null)).toBe(true);
+  });
+
+  it("keeps paused work available when manually switching the current operation", () => {
+    const assignments = [
+      assignment({ id: "paused-current", status: "paused" }),
+      assignment({ id: "selected", status: "assigned" }),
+      assignment({ id: "next", status: "assigned" }),
+      assignment({ id: "done", status: "completed" }),
+    ];
+    expect(getCurrentSwitchCandidatesForDate(assignments, new Date(2026, 5, 23), "selected").map((item) => item.id)).toEqual(["paused-current", "next"]);
+  });
+
+  it("lets workers remove only unstarted self-claimed assignments", () => {
+    expect(canWorkerRemoveAssignment(assignment({ source: "self_claimed", canWorkerRemove: true }))).toBe(true);
+    expect(canWorkerRemoveAssignment(assignment({ source: "self_claimed", canWorkerRemove: true, status: "running" }))).toBe(false);
+    expect(canWorkerRemoveAssignment(assignment({ source: "assigned", canWorkerRemove: false }))).toBe(false);
   });
 });
 

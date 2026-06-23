@@ -11,6 +11,11 @@ export interface ImageSelectionResult {
   error: string | null;
 }
 
+export interface CompletionPhotoPayload {
+  name: string;
+  url: string;
+}
+
 export function selectImageFiles(
   files: Iterable<File>,
   existingCount: number,
@@ -45,8 +50,28 @@ export function revokeImagePreviews(previews: ImagePreview[]) {
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("图片读取失败"));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result.startsWith("data:image/")) {
+        reject(new Error("图片读取失败，请重新选择照片"));
+        return;
+      }
+      resolve(result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("图片读取失败，请重新选择照片"));
+    reader.onabort = () => reject(new Error("图片读取已取消，请重新选择照片"));
     reader.readAsDataURL(file);
   });
+}
+
+export async function filesToCompletionPhotos(files: File[]): Promise<CompletionPhotoPayload[]> {
+  const photos: CompletionPhotoPayload[] = [];
+  for (const file of files) {
+    try {
+      photos.push({ name: file.name, url: await fileToDataUrl(file) });
+    } catch {
+      throw new Error(`图片“${file.name || "未命名"}”读取失败，请删除后重新选择`);
+    }
+  }
+  return photos;
 }

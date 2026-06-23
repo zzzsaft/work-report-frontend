@@ -15,6 +15,8 @@ const StatsPage = lazy(() => mobilePages.then((m) => ({ default: m.StatsPage }))
 const ProfilePage = lazy(() => mobilePages.then((m) => ({ default: m.ProfilePage })));
 const DashboardPage = lazy(() => adminPages.then((m) => ({ default: m.DashboardPage })));
 const OrdersPage = lazy(() => adminPages.then((m) => ({ default: m.OrdersPage })));
+const LeaderImportPage = lazy(() => adminPages.then((m) => ({ default: m.LeaderImportPage })));
+const AssignmentAdminPage = lazy(() => adminPages.then((m) => ({ default: m.AssignmentAdminPage })));
 const ReportsPage = lazy(() => adminPages.then((m) => ({ default: m.ReportsPage })));
 const PeoplePage = lazy(() => adminPages.then((m) => ({ default: m.PeoplePage })));
 const ExceptionsPage = lazy(() => adminPages.then((m) => ({ default: m.ExceptionsPage })));
@@ -23,7 +25,7 @@ const SettingsPage = lazy(() => adminPages.then((m) => ({ default: m.SettingsPag
 function ProtectedApp() {
   const routes = <Suspense fallback={<div className="page-state"><span className="spinner" /><p>正在加载页面...</p></div>}><Routes>
     <Route element={<MobileLayout />}><Route path="/work/current" element={<CurrentOperationPage />} /><Route path="/work/operations" element={<OperationsPage />} /><Route path="/work/stats" element={<StatsPage />} /><Route path="/me" element={<ProfilePage />} /></Route>
-    <Route path="/admin" element={<CapabilityGuard><AdminLayout /></CapabilityGuard>}><Route index element={<Navigate to="dashboard" replace />} /><Route path="dashboard" element={<DashboardPage />} /><Route path="orders" element={<OrdersPage />} /><Route path="reports" element={<ReportsPage />} /><Route path="people" element={<PeoplePage />} /><Route path="exceptions" element={<ExceptionsPage />} /><Route path="settings" element={<SettingsPage />} /></Route>
+    <Route path="/admin" element={<CapabilityGuard><AdminLayout /></CapabilityGuard>}><Route index element={<Navigate to="dashboard" replace />} /><Route path="dashboard" element={<DashboardPage />} /><Route path="orders" element={<OrdersPage />} /><Route path="import" element={<LeaderImportPage />} /><Route path="assignments" element={<AssignmentAdminPage />} /><Route path="reports" element={<ReportsPage />} /><Route path="people" element={<PeoplePage />} /><Route path="exceptions" element={<ExceptionsPage />} /><Route path="settings" element={<SettingsPage />} /></Route>
     <Route path="*" element={<Navigate to="/work/current" replace />} />
   </Routes></Suspense>;
   return isMockMode ? routes : <AuthGuard>{routes}</AuthGuard>;

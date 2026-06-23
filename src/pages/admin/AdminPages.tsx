@@ -1,16 +1,75 @@
-import { useCallback, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, Factory, RefreshCw, Search, Timer, UsersRound, Wrench } from "lucide-react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { HotTable } from "@handsontable/react-wrapper";
+import { registerAllModules } from "handsontable/registry";
+import type Handsontable from "handsontable/base";
+import "handsontable/styles/handsontable.min.css";
+import "handsontable/styles/ht-theme-main.min.css";
+import { AlertTriangle, CheckCircle2, Clock3, Factory, RefreshCw, Search, Timer, Trash2, Upload, UserPlus, UsersRound, Wrench } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { workReportRepository } from "@/api/services/workReport.service";
 import { isMockMode } from "@/api/services/workReport.service";
-import { statusLabel, type DashboardSummary, type LaborStatistics, type ProductionException, type ReportRecord, type WorkOrder } from "@/domain/work-report";
+import { canWorkerRemoveAssignment, statusLabel, type ClaimableOperation, type LeaderImportDraft, type DashboardSummary, type LaborStatistics, type OperationAssignment, type ProductionException, type ReportRecord, type WorkOrder } from "@/domain/work-report";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { getErrorMessage } from "@/utils/errors";
+
+registerAllModules();
 
 function AdminHeader({ title, description, action }: { title: string; description: string; action?: ReactNode }) { return <header className="admin-page-header"><div><h1>{title}</h1><p>{description}</p></div>{action}</header>; }
 function LoadingTable() { return <div className="admin-loading"><span className="spinner" />正在读取生产数据...</div>; }
 function AdminError({ message, retry }: { message: string; retry: () => void }) { return <div className="admin-loading"><span>{message}</span><button className="table-action" onClick={retry}>重试</button></div>; }
 function AdminStatus({ status }: { status: string }) { return <span className={`admin-status ${status}`}>{statusLabel[status as keyof typeof statusLabel] || ({ in_progress: "生产中", completed: "已完成", pending: "待生产", exception: "异常" }[status] || status)}</span>; }
+
+const importColumns = [
+  { key: "productCode", title: "产品号", width: 180 },
+  { key: "partCode", title: "部件号", width: 170 },
+  { key: "operationCode", title: "工序号", width: 130 },
+  { key: "operationName", title: "工序名", width: 180 },
+  { key: "quantity", title: "数量", width: 100 },
+  { key: "estimatedHours", title: "工时", width: 100 },
+] as const;
+type ImportColumnKey = (typeof importColumns)[number]["key"];
+type LeaderImportGridRow = Record<ImportColumnKey, string>;
+type ImportCellError = { row: number; column: ImportColumnKey; message: string };
+const createEmptyImportRow = (): LeaderImportGridRow => ({ productCode: "", partCode: "", operationCode: "", operationName: "", quantity: "", estimatedHours: "" });
+const createImportRows = () => [
+  { productCode: "CP-JSJ-240623-07", partCode: "PART-CASE-001", operationCode: "OP-080", operationName: "终检复核", quantity: "40", estimatedHours: "1.5" },
+  { productCode: "CP-FL-240623-02", partCode: "PART-FLANGE-001", operationCode: "OP-040", operationName: "清洗包装", quantity: "52", estimatedHours: "2" },
+  ...Array.from({ length: 18 }, createEmptyImportRow),
+];
+const hasImportRowValue = (row: LeaderImportGridRow) => Object.values(row).some((value) => value.trim());
+const getImportDraftRows = (rows: LeaderImportGridRow[]): LeaderImportDraft[] => rows.filter(hasImportRowValue).map((row) => ({
+  productCode: row.productCode.trim(),
+  partCode: row.partCode.trim(),
+  operationCode: row.operationCode.trim(),
+  operationName: row.operationName.trim(),
+  quantity: Number(row.quantity),
+  estimatedHours: Number(row.estimatedHours),
+}));
+function validateImportGridRows(rows: LeaderImportGridRow[]) {
+  const errors: ImportCellError[] = [];
+  const seen = new Map<string, number>();
+  rows.forEach((row, rowIndex) => {
+    if (!hasImportRowValue(row)) return;
+    (["productCode", "partCode", "operationCode", "operationName"] as const).forEach((column) => {
+      if (!row[column].trim()) errors.push({ row: rowIndex, column, message: "必填" });
+    });
+    const quantity = Number(row.quantity);
+    if (!row.quantity.trim() || !Number.isFinite(quantity) || quantity <= 0) errors.push({ row: rowIndex, column: "quantity", message: "请输入大于 0 的数字" });
+    const estimatedHours = Number(row.estimatedHours);
+    if (!row.estimatedHours.trim() || !Number.isFinite(estimatedHours) || estimatedHours <= 0) errors.push({ row: rowIndex, column: "estimatedHours", message: "请输入大于 0 的数字" });
+    const key = `${row.productCode.trim()}-${row.partCode.trim()}-${row.operationCode.trim()}`;
+    if (row.productCode.trim() && row.partCode.trim() && row.operationCode.trim()) {
+      const firstRow = seen.get(key);
+      if (firstRow !== undefined) {
+        errors.push({ row: rowIndex, column: "operationCode", message: `与第 ${firstRow + 1} 行重复` });
+        errors.push({ row: firstRow, column: "operationCode", message: `与第 ${rowIndex + 1} 行重复` });
+      } else {
+        seen.set(key, rowIndex);
+      }
+    }
+  });
+  return errors;
+}
 
 export function DashboardPage() {
   const load = useCallback(async () => { const [summary, stats] = await Promise.all([workReportRepository.getDashboard(), workReportRepository.getStatistics("week")]); return { summary, stats }; }, []);
@@ -29,6 +88,81 @@ export function OrdersPage() {
   const filtered = orders.filter((item) => `${item.orderNo}${item.productName}${item.productCode}`.toLowerCase().includes(search.toLowerCase()));
   if (error && !loading) return <><AdminHeader title="工单与工序" description="查看源工单进度并管理人员分配" action={<SearchBox value={search} onChange={setSearch} />} /><section className="admin-panel"><AdminError message={error} retry={() => void reload()} /></section></>;
   return <><AdminHeader title="工单与工序" description="查看源工单进度并管理人员分配" action={<SearchBox value={search} onChange={setSearch} />} /><section className="admin-panel">{loading ? <LoadingTable /> : <div className="table-wrap"><table><thead><tr><th>工单号</th><th>产品</th><th>计划数量</th><th>完成进度</th><th>交期</th><th>状态</th><th>操作</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productName}<small>{item.productCode}</small></td><td>{item.plannedQuantity} 件</td><td><div className="progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span>{item.progress}%</div></td><td>{item.dueDate}</td><td><AdminStatus status={item.status} /></td><td><button className="table-action">查看工序</button></td></tr>)}</tbody></table></div>}</section></>;
+}
+
+export function LeaderImportPage() {
+  const [tableRows, setTableRows] = useState<LeaderImportGridRow[]>(createImportRows);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const rows = useMemo(() => getImportDraftRows(tableRows), [tableRows]);
+  const errors = useMemo(() => validateImportGridRows(tableRows), [tableRows]);
+  const errorByCell = useMemo(() => {
+    const map = new Map<string, string>();
+    errors.forEach((error) => map.set(`${error.row}-${error.column}`, error.message));
+    return map;
+  }, [errors]);
+  const updateRows = (changes: Handsontable.CellChange[] | null, source: Handsontable.ChangeSource) => {
+    if (!changes || source === "loadData") return;
+    setMessage("");
+    setTableRows((currentRows) => {
+      const nextRows = currentRows.map((row) => ({ ...row }));
+      changes.forEach(([rowIndex, prop, , nextValue]) => {
+        if (typeof prop !== "string" || !importColumns.some((column) => column.key === prop)) return;
+        while (!nextRows[rowIndex]) nextRows.push(createEmptyImportRow());
+        nextRows[rowIndex] = { ...nextRows[rowIndex], [prop]: String(nextValue ?? "") };
+      });
+      return nextRows;
+    });
+  };
+  const submit = async () => {
+    setSubmitting(true);
+    setMessage("");
+    try {
+      const result = await workReportRepository.importLeaderOperations(rows);
+      setMessage(result.errors.length ? `导入失败：${result.errors.map((item) => `第${item.row}行 ${item.message}`).join("；")}` : `已导入 ${result.accepted} 道工序，可供员工领取`);
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return <><AdminHeader title="小组长工序导入" description="直接从 Excel 粘贴或在单元格内编辑，格式错误会标红" action={<button className="admin-primary-action" disabled={submitting || !rows.length || errors.length > 0} onClick={() => void submit()}><Upload />确认导入</button>} /><section className="admin-panel import-panel"><div className="import-summary"><span>已填写 {rows.length} 行</span>{errors.length > 0 ? <strong className="danger-text">{errors.length} 个单元格需修正</strong> : <strong className="success-text">校验通过</strong>}</div>{message && <div className="admin-message">{message}</div>}<div className="leader-import-sheet ht-theme-main"><HotTable data={tableRows} columns={importColumns.map((column) => ({ data: column.key, width: column.width }))} colHeaders={importColumns.map((column) => column.title)} rowHeaders={true} height={520} width="100%" stretchH="all" autoWrapRow={true} autoWrapCol={true} minSpareRows={6} manualColumnResize={true} contextMenu={["row_above", "row_below", "remove_row", "---------", "undo", "redo"]} copyPaste={true} comments={true} cells={(row, column) => { const key = importColumns[column]?.key; const error = key ? errorByCell.get(`${row}-${key}`) : undefined; const cellProperties: Handsontable.CellProperties = {} as Handsontable.CellProperties; if (error) { cellProperties.className = "leader-import-invalid"; cellProperties.comment = { value: error }; } return cellProperties; }} afterChange={updateRows} licenseKey="non-commercial-and-evaluation" /></div></section></>;
+}
+
+export function AssignmentAdminPage() {
+  const [keyword, setKeyword] = useState("CP-JSJ-240623-07");
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [selectedPart, setSelectedPart] = useState("");
+  const [operations, setOperations] = useState<ClaimableOperation[]>([]);
+  const [workerId, setWorkerId] = useState("EMP-20240018");
+  const [workerName, setWorkerName] = useState("张师傅");
+  const [message, setMessage] = useState("");
+  const loadProducts = useCallback(() => workReportRepository.searchClaimableProducts(keyword), [keyword]);
+  const { data: products = [], loading: productsLoading, reload } = useAsyncResource(loadProducts);
+  const { data: assignments = [], loading: assignmentsLoading, reload: reloadAssignments } = useAsyncResource<OperationAssignment[]>(useCallback(() => workReportRepository.getAssignments(), []));
+  const loadParts = async (productId: string) => {
+    setSelectedProduct(productId);
+    setSelectedPart("");
+    setOperations([]);
+  };
+  const { data: parts = [] } = useAsyncResource(useCallback(() => selectedProduct ? workReportRepository.getClaimableParts(selectedProduct) : Promise.resolve([]), [selectedProduct]));
+  const choosePart = async (partId: string) => {
+    setSelectedPart(partId);
+    setOperations(await workReportRepository.getClaimableOperations(partId));
+  };
+  const assign = async (operationId: string) => {
+    setMessage("");
+    await workReportRepository.adminAssignOperation({ operationId, workerId, workerName });
+    setMessage(`已分配给 ${workerName}`);
+    await reloadAssignments();
+  };
+  const forceRemove = async (assignmentId: string) => {
+    const reason = "管理员调整工单项目";
+    await workReportRepository.adminRemoveAssignment(assignmentId, reason);
+    setMessage("已由高级后台移除，并写入报工记录");
+    await reloadAssignments();
+  };
+  return <><AdminHeader title="人员工序分配" description="高级后台可分配工序，也可处理已开始或不可自删的工序" action={<div className="admin-inline-actions"><SearchBox value={keyword} onChange={setKeyword} /><button className="admin-primary-action" onClick={() => void reload()}><Search />搜索</button></div>} />{message && <div className="admin-message">{message}</div>}<div className="assignment-admin-grid"><section className="admin-panel settings-card"><div className="settings-icon"><UserPlus /></div><h2>分配对象</h2><label className="admin-field">工号<input value={workerId} onChange={(event) => setWorkerId(event.target.value)} /></label><label className="admin-field">姓名<input value={workerName} onChange={(event) => setWorkerName(event.target.value)} /></label><h2>产品与部件</h2>{productsLoading ? <LoadingTable /> : <div className="admin-choice-list">{products.map((item) => <button key={item.id} className={selectedProduct === item.id ? "selected" : ""} onClick={() => void loadParts(item.id)}><strong>{item.productCode}</strong><span>{item.productName}</span></button>)}</div>}<div className="admin-choice-list compact">{parts.map((item) => <button key={item.id} className={selectedPart === item.id ? "selected" : ""} onClick={() => void choosePart(item.id)}><strong>{item.partCode}</strong><span>{item.partName}</span></button>)}</div></section><section className="admin-panel"><div className="table-wrap"><table><thead><tr><th>工序</th><th>部件</th><th>数量</th><th>工时</th><th>已领</th><th>操作</th></tr></thead><tbody>{operations.map((item) => <tr key={item.id}><td><strong>{item.operationCode}</strong><small>{item.operationName}</small></td><td>{item.partCode}</td><td>{item.plannedQuantity}</td><td>{item.estimatedHours}</td><td>{item.claimedWorkers}</td><td><button className="table-action" onClick={() => void assign(item.id)}>分配给人员</button></td></tr>)}</tbody></table></div></section></div><section className="admin-panel chart-panel"><div className="panel-heading"><div><h2>当前人员工序</h2><p>高级后台可移除已开始、自领或后台分配的异常工序</p></div></div>{assignmentsLoading ? <LoadingTable /> : <div className="table-wrap"><table><thead><tr><th>工单</th><th>产品/部件</th><th>工序</th><th>人员</th><th>来源</th><th>状态</th><th>员工可删</th><th>高级操作</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productCode}<small>{item.partCode}</small></td><td>{item.operationName}</td><td>{item.collaborators.join(" / ")}</td><td>{item.source === "self_claimed" ? "自主领取" : "后台分配"}</td><td><AdminStatus status={item.status} /></td><td>{canWorkerRemoveAssignment(item) ? "是" : "否"}</td><td><button className="table-action danger-action" onClick={() => void forceRemove(item.id)}><Trash2 />移除</button></td></tr>)}</tbody></table></div>}</section></>;
 }
 
 export function ReportsPage() {

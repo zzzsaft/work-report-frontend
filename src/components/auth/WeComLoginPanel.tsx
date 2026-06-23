@@ -15,6 +15,7 @@ export function WeComLoginPanel({ redirect }: { redirect: string }) {
       panel = mountWeComLoginPanel({
         element: panelElement.current,
         state,
+        redirectUri: window.location.href,
         onSuccess: (code) => {
           const params = new URLSearchParams({ code, state });
           window.location.assign(`/auth-callback?${params.toString()}`);
