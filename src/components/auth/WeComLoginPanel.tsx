@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createLoginState, mountWeComLoginPanel } from "@/utils/wecom";
+import { createLoginState, createWeComOAuthUrl, isWeComBrowser, mountWeComLoginPanel } from "@/utils/wecom";
 
 export function WeComLoginPanel({ redirect }: { redirect: string }) {
   const panelElement = useRef<HTMLDivElement>(null);
@@ -12,6 +12,11 @@ export function WeComLoginPanel({ redirect }: { redirect: string }) {
     let panel: ReturnType<typeof mountWeComLoginPanel> | undefined;
 
     try {
+      if (isWeComBrowser()) {
+        window.location.replace(createWeComOAuthUrl(state));
+        return;
+      }
+
       panel = mountWeComLoginPanel({
         element: panelElement.current,
         state,
