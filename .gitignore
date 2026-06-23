@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+*.log
+.npm-cache/
+test-results/
+playwright-report/
