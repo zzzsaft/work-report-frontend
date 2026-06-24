@@ -1,14 +1,42 @@
-# 报工 API 对接文档
+# 工序领取与报工 API 对接文档
 
-本文档是后端实现契约。后端按本文档提供接口和字段后，前端只需要配置 `VITE_WORK_REPORT_API_BASE_URL` 并将 `VITE_USE_MOCK_DATA=false`，不需要修改页面或 API 代码。
+本文档是后端实现契约，按版本分为 v1 和 v2。
+
+- **v1 当前版本**：员工只需要登录后领取工序、查看自己已领取的未开始工序、删除误领工序；不需要开始、暂停、恢复、完工、拍照、工时统计或报工记录。
+- **v2 升级版本**：在 v1 基础上恢复完整报工流程，包括当前工序、开始/暂停/恢复/完工、照片、统计、后台报工记录和异常处理。
+
+后端按对应版本提供接口和字段后，前端只需要配置 `VITE_WORK_REPORT_API_BASE_URL` 并将 `VITE_USE_MOCK_DATA=false`，不需要修改页面或 API 代码。
 
 ## 接入边界
 
 - 认证接口仍使用原后端 `http://hz.jc-times.com:2000/`，不要修改 `VITE_AUTH_API_BASE_URL`。
-- 报工接口使用独立后端地址 `VITE_WORK_REPORT_API_BASE_URL`，前端通过 `workReportClient` 请求。
-- 每个报工请求都会带 `Authorization: Bearer <token>`，token 来自企业微信登录后的认证服务。
-- 报工后端需要用该 token 识别当前用户，也可以在后端内部调用认证服务校验用户。
+- v1/v2 业务接口都使用独立后端地址 `VITE_WORK_REPORT_API_BASE_URL`，前端通过 `workReportClient` 请求。
+- 每个业务请求都会带 `Authorization: Bearer <token>`，token 来自企业微信登录后的认证服务。
+- 业务后端需要用该 token 识别当前用户，也可以在后端内部调用认证服务校验用户。
 - 本文档字段名全部使用 camelCase，后端请直接返回 camelCase，避免前端增加 DTO 映射。
+
+## 版本边界
+
+### v1 必须实现
+
+v1 只覆盖员工领取工序：
+
+1. 获取当前用户工序列表：用于显示“我的已领取工序”。
+2. 搜索或浏览最近可领取产品/工序。
+3. 查询产品下部件、部件下工序。
+4. 员工自主领取工序。
+5. 员工删除未开始的自领工序。
+
+v1 不需要实现任何报工状态流转。前端不会在 v1 入口调用开始、暂停、恢复、完工、统计或报工记录接口。
+
+### v2 升级实现
+
+v2 在 v1 之上增加：
+
+- 当前工序页和完整报工状态流转。
+- 完工照片、完工数量、备注。
+- 个人统计、出勤、后台报工记录、异常处理。
+- 后台分配、小组长导入、高级移除等管理能力。
 
 ## 通用约定
 
@@ -331,6 +359,7 @@
 | `plannedQuantity` | number | 是 | 计划数量 |
 | `estimatedHours` | number | 是 | 预计工时 |
 | `claimedWorkers` | number | 是 | 已领取或已分配人数 |
+| `maxClaimWorkers` | number | 否 | 最多可领取或分配人数；达到上限时前端禁用领取 |
 | `status` | string | 是 | `available` 可领取，`claimed` 已领满，`closed` 已关闭 |
 
 ### LeaderImportDraft
@@ -420,7 +449,114 @@
 | `createdAt` | string | 是 | 创建时间 |
 | `status` | string | 是 | `open` 或 `resolved` |
 
-## 接口清单
+## v1 接口清单（当前版本必须实现）
+
+v1 只要求员工领取工序，不要求报工。以下接口是当前上线版本必须提供的业务接口。
+
+### V1-1. 获取当前用户工序列表
+
+`GET /assignments`
+
+用途：移动端“我的已领取工序”列表。v1 前端只展示当前用户 `source = self_claimed` 且 `status = assigned` 的工序，并允许删除其中 `canWorkerRemove = true` 的记录。
+
+请求：无 query，无 body。
+
+返回：`OperationAssignment[]`
+
+v1 返回要求：
+
+- 必须只返回当前 token 对应用户可见的 assignment。
+- 自领且未开始的工序：`source = self_claimed`、`status = assigned`、`canWorkerRemove = true`。
+- v1 不需要返回 `session`，也不会展示 `running`、`paused`、`completed` 的报工能力。
+- 数组为空时返回 `[]`。
+
+### V1-2. 搜索或浏览可领取产品
+
+`GET /claim/products?keyword=CP-JSJ-240623-07`
+
+用途：员工按产品编号、产品名称或工单号搜索；也用于 v1 首页加载“最近可以领取的工序”。
+
+Query：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `keyword` | string | 否 | 搜索关键词；为空或不传时返回最近可领取产品 |
+
+返回：`ClaimableProduct[]`
+
+规则：
+
+- `keyword` 有值时，按产品编号、产品名称、工单号模糊匹配。
+- `keyword` 为空时，返回最近可领取产品，建议按导入时间、计划开始时间或工单优先级倒序，数量建议 6 到 20 条。
+- 只返回仍存在可领取或可查看工序的产品；如果产品下所有工序都 `closed`，可以不返回。
+
+### V1-3. 查询产品下可领取部件
+
+`GET /claim/products/:productId/parts`
+
+用途：选择产品后展示部件列表。
+
+返回：`ClaimablePart[]`
+
+规则：
+
+- 只返回该产品下当前员工可见的部件。
+- 数组为空时返回 `[]`。
+
+### V1-4. 查询部件下可领取工序
+
+`GET /claim/parts/:partId/operations`
+
+用途：选择部件后展示可领取、已满或已关闭工序；也用于前端聚合“最近可以领取的工序”。
+
+返回：`ClaimableOperation[]`
+
+规则：
+
+- `status = available`：前端显示“可领取”，按钮可点击。
+- `status = claimed`：表示领取人数已满，前端显示“已满/人数已满”，按钮禁用。
+- `status = closed`：表示工序关闭，前端显示“已关闭”，按钮禁用。
+- 如果设置了人数限制，返回 `maxClaimWorkers`；当前已领人数返回 `claimedWorkers`。
+
+### V1-5. 员工自主领取工序
+
+`POST /claim/operations/:operationId/claim`
+
+用途：员工把工序池中的工序领取到自己的工序列表。
+
+请求 body：无。
+
+业务规则：
+
+- operation.status 必须是 `available`。
+- 如果存在 `maxClaimWorkers`，则 `claimedWorkers < maxClaimWorkers` 才允许领取。
+- 当前员工不能重复领取同一产品、部件、工序。
+- 创建 assignment：`source = self_claimed`、`status = assigned`、`canWorkerRemove = true`。
+- assignment.collaborators 至少包含当前员工姓名。
+- 更新 `operation.claimedWorkers`；达到 `maxClaimWorkers` 时将 operation.status 更新为 `claimed`。
+- 重复领取、人数已满或状态不可领时返回 409，并在响应中提供 `message`。
+
+返回：新建的 `OperationAssignment`
+
+### V1-6. 员工删除未开始的自领工序
+
+`DELETE /assignments/:assignmentId/claim`
+
+用途：员工删除自己误领且未开始的工序。
+
+业务规则：
+
+- assignment 必须属于当前用户。
+- 只有 `source = self_claimed`、`status = assigned`、`canWorkerRemove = true` 时允许删除。
+- 删除后回退对应 operation.claimedWorkers。
+- 如果 operation 因人数已满处于 `claimed`，回退后应恢复为 `available`，除非该 operation 已被后台关闭。
+- 不满足条件返回 409。
+
+成功返回：HTTP 204 或空响应。
+
+## v2 接口清单（升级预留）
+
+v2 在 v1 基础上恢复完整报工、统计和后台能力。下面保留完整接口说明，v1 当前不要求实现除领取相关以外的接口。
 
 ### 1. 获取当前用户业务权限
 
@@ -601,14 +737,15 @@ Query：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `keyword` | string | 是 | 搜索关键词 |
+| `keyword` | string | 否 | 搜索关键词；为空或不传时返回最近可领取产品 |
 
 返回：`ClaimableProduct[]`
 
 规则：
 
-- keyword 为空时建议返回空数组。
-- 只返回仍有可领取工序的产品。
+- `keyword` 有值时，按产品编号、产品名称、工单号模糊匹配。
+- `keyword` 为空时，返回最近可领取产品，建议按导入时间、计划开始时间或工单优先级倒序。
+- 只返回仍存在可领取或可查看工序的产品；如果产品下所有工序都 `closed`，可以不返回。
 
 ### 10. 查询产品下可领取部件
 
@@ -935,6 +1072,7 @@ Query：
 | `remaining_quantity` | int | 剩余数量 |
 | `estimated_hours` | decimal(8,2) | 预计工时 |
 | `claimed_workers` | int | 已领取或已分配人数 |
+| `max_claim_workers` | int | 最多可领取或分配人数，可为空表示不限制 |
 | `status` | varchar(20) | `available`、`claimed`、`closed` |
 | `source` | varchar(20) | `leader_imported`、`system`、`admin` |
 | `created_by` | varchar(64) | 创建人 |
@@ -1095,9 +1233,10 @@ Query：
 
 ## 后端实现重点
 
-1. 保持报工接口和认证接口隔离：报工后端不要接管 `/auth/wecom/token` 或 `/auth/me`。
-2. 返回字段必须完整，数组字段没有数据时返回 `[]`，不要返回 `null`。
-3. `OperationAssignment` 是核心聚合对象，建议后端查询时从工单、部件、工序池、assignment、session、pause、photo 聚合生成。
-4. 所有状态变更接口要做幂等和状态校验，错误时返回明确 `message`。
-5. 自主领取、后台分配、完工、强制移除都需要事务，避免 claimedWorkers、remainingQuantity、assignment 状态不一致。
-6. 照片生产环境建议上传到对象存储或文件服务，并在 `complete` 响应里返回可访问 URL。
+1. 保持业务接口和认证接口隔离：业务后端不要接管 `/auth/wecom/token` 或 `/auth/me`。
+2. v1 当前只实现领取链路即可；不要为了 v1 强行实现开始、暂停、完工、统计或报工记录。
+3. 返回字段必须完整，数组字段没有数据时返回 `[]`，不要返回 `null`。
+4. `OperationAssignment` 是核心聚合对象，v1 至少要完整返回自领未开始工序；v2 再聚合 session、pause、photo 等报工数据。
+5. 所有状态变更接口要做幂等和状态校验，错误时返回明确 `message`。
+6. 自主领取、后台分配、完工、强制移除都需要事务，避免 claimedWorkers、maxClaimWorkers、remainingQuantity、assignment 状态不一致。
+7. v2 照片生产环境建议上传到对象存储或文件服务，并在 `complete` 响应里返回可访问 URL。

@@ -15,6 +15,7 @@ interface WorkReportState {
   claimProducts: ClaimableProduct[];
   claimParts: ClaimablePart[];
   claimOperations: ClaimableOperation[];
+  recentClaimOperations: ClaimableOperation[];
   dayCompleted: boolean;
   currentLoading: boolean;
   assignmentsLoading: boolean;
@@ -28,6 +29,7 @@ interface WorkReportState {
   loadStatistics: (period: LaborStatistics["period"]) => Promise<void>;
   loadCapabilities: () => Promise<void>;
   searchClaimableProducts: (keyword: string) => Promise<void>;
+  loadRecentClaimableOperations: () => Promise<void>;
   loadClaimableParts: (productId: string) => Promise<void>;
   loadClaimableOperations: (partId: string) => Promise<void>;
   claimOperation: (operationId: string) => Promise<OperationAssignment | null>;
@@ -56,7 +58,7 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
     finally { set({ actionLoading: false }); }
   };
   return {
-    current: null, assignments: [], statistics: null, capabilities: null, nextCandidates: [], switchCandidates: [], claimProducts: [], claimParts: [], claimOperations: [], dayCompleted: false,
+    current: null, assignments: [], statistics: null, capabilities: null, nextCandidates: [], switchCandidates: [], claimProducts: [], claimParts: [], claimOperations: [], recentClaimOperations: [], dayCompleted: false,
     currentLoading: false, assignmentsLoading: false, statisticsLoading: false, capabilitiesLoading: false, claimLoading: false,
     actionLoading: false, error: null,
     loadCurrent: async () => {
@@ -119,6 +121,17 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
       set({ claimLoading: true, error: null });
       try { set({ claimProducts: await workReportRepository.searchClaimableProducts(keyword), claimParts: [], claimOperations: [] }); }
       catch (error) { set({ error: getErrorMessage(error) }); }
+      finally { set({ claimLoading: false }); }
+    },
+    loadRecentClaimableOperations: async () => {
+      set({ claimLoading: true, error: null });
+      try {
+        const products = await workReportRepository.searchClaimableProducts("");
+        const partsByProduct = await Promise.all(products.slice(0, 6).map((product) => workReportRepository.getClaimableParts(product.id)));
+        const parts = partsByProduct.flat();
+        const operationsByPart = await Promise.all(parts.map((part) => workReportRepository.getClaimableOperations(part.id)));
+        set({ claimProducts: products, recentClaimOperations: operationsByPart.flat().slice(0, 12) });
+      } catch (error) { set({ error: getErrorMessage(error) }); }
       finally { set({ claimLoading: false }); }
     },
     loadClaimableParts: async (productId) => {

@@ -77,10 +77,10 @@ const claimParts: ClaimablePart[] = [
 ];
 
 const claimOperations: ClaimableOperation[] = [
-  { id: "pool-op-001", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-060", operationName: "终检前倒角", operationNote: "重点检查窗口边、孔口倒角，完成后流转终检。", plannedQuantity: 40, estimatedHours: 2.5, claimedWorkers: 1, status: "available" },
+  { id: "pool-op-001", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-060", operationName: "终检前倒角", operationNote: "重点检查窗口边、孔口倒角，完成后流转终检。", plannedQuantity: 40, estimatedHours: 2.5, claimedWorkers: 1, maxClaimWorkers: 2, status: "available" },
   { id: "pool-op-002", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-070", operationName: "清洗包装", operationNote: "清洗后擦干，按周转箱标签摆放。", plannedQuantity: 40, estimatedHours: 1.5, claimedWorkers: 0, status: "available" },
   { id: "pool-op-003", productId: "claim-product-001", partId: "part-002", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-COVER-002", partName: "端盖", operationCode: "OP-020", operationName: "端盖钻孔", operationNote: "孔位按图纸 A2 面基准，首件需复核。", plannedQuantity: 28, estimatedHours: 2, claimedWorkers: 0, status: "available" },
-  { id: "pool-op-004", productId: "claim-product-002", partId: "part-003", orderNo: "WO-20260623-021", productCode: "CP-FL-240623-02", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-030", operationName: "法兰攻丝", operationNote: "M10 丝孔，攻丝后吹净铁屑。", plannedQuantity: 52, estimatedHours: 3, claimedWorkers: 2, status: "available" },
+  { id: "pool-op-004", productId: "claim-product-002", partId: "part-003", orderNo: "WO-20260623-021", productCode: "CP-FL-240623-02", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-030", operationName: "法兰攻丝", operationNote: "M10 丝孔，攻丝后吹净铁屑。", plannedQuantity: 52, estimatedHours: 3, claimedWorkers: 2, maxClaimWorkers: 2, status: "claimed" },
 ];
 
 const completedAssignment = (id: string, daysAgo: number, operationCode: string, operationName: string, productCode: string, productName: string): OperationAssignment => {
@@ -247,7 +247,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
   async searchClaimableProducts(keyword) {
     await delay();
     const key = keyword.trim().toLowerCase();
-    if (!key) return [];
+    if (!key) return load().claimProducts;
     return load().claimProducts.filter((item) => `${item.productCode}${item.productName}${item.orderNo}`.toLowerCase().includes(key));
   },
   async getClaimableParts(productId) { await delay(); return load().claimParts.filter((item) => item.productId === productId); },
@@ -257,11 +257,16 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const db = load();
     const operation = db.claimOperations.find((item) => item.id === operationId);
     if (!operation || operation.status !== "available") throw new Error("该工序暂不可领取");
+    if (operation.maxClaimWorkers && operation.claimedWorkers >= operation.maxClaimWorkers) throw new Error("该工序领取人数已满");
     const duplicate = db.assignments.some((item) => item.operationCode === operation.operationCode && item.partCode === operation.partCode && item.productCode === operation.productCode && item.status !== "cancelled");
     if (duplicate) throw new Error("你已经有这道工序，不能重复领取");
     const assignment = createAssignmentFromPool(operation, "self_claimed");
     db.assignments.unshift(assignment);
-    db.claimOperations = db.claimOperations.map((item) => item.id === operationId ? { ...item, claimedWorkers: item.claimedWorkers + 1 } : item);
+    db.claimOperations = db.claimOperations.map((item) => {
+      if (item.id !== operationId) return item;
+      const claimedWorkers = item.claimedWorkers + 1;
+      return { ...item, claimedWorkers, status: item.maxClaimWorkers && claimedWorkers >= item.maxClaimWorkers ? "claimed" : item.status };
+    });
     save(db);
     return assignment;
   },
@@ -271,6 +276,12 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const assignment = findAssignment(db, assignmentId);
     if (!canWorkerRemoveAssignment(assignment)) throw new Error("该工序已开始或由后台分配，不能自行删除");
     db.assignments = db.assignments.filter((item) => item.id !== assignmentId);
+    db.claimOperations = db.claimOperations.map((item) => {
+      const sameOperation = item.productCode === assignment.productCode && item.partCode === assignment.partCode && item.operationCode === assignment.operationCode;
+      if (!sameOperation) return item;
+      const claimedWorkers = Math.max(0, item.claimedWorkers - 1);
+      return { ...item, claimedWorkers, status: item.status === "closed" ? item.status : "available" };
+    });
     save(db);
   },
   async getStatistics(period) {

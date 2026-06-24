@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { createLoginState, createWeComOAuthUrl, isWeComBrowser, mountWeComLoginPanel } from "@/utils/wecom";
+import {
+  createLoginState,
+  createWeComOAuthUrl,
+  isWeComBrowser,
+  mountWeComLoginPanel,
+} from "@/utils/wecom";
 
 export function WeComLoginPanel({ redirect }: { redirect: string }) {
   const panelElement = useRef<HTMLDivElement>(null);
@@ -26,12 +31,17 @@ export function WeComLoginPanel({ redirect }: { redirect: string }) {
           window.location.assign(`/auth-callback?${params.toString()}`);
         },
         onFail: ({ errCode, errMsg }) => {
-          const codeText = errCode === undefined ? "" : `（错误码：${errCode}）`;
+          const codeText =
+            errCode === undefined ? "" : `（错误码：${errCode}）`;
           setError(`${errMsg || "企业微信登录面板授权失败"}${codeText}`);
         },
       });
     } catch (mountError) {
-      setError(mountError instanceof Error ? mountError.message : "企业微信登录面板加载失败");
+      setError(
+        mountError instanceof Error
+          ? mountError.message
+          : "企业微信登录面板加载失败"
+      );
     }
 
     return () => panel?.unmount();

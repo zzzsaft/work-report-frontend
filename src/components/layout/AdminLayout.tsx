@@ -68,7 +68,7 @@ export default function AdminLayout() {
             <BarChart3 />
             <span>实时生产数据</span>
           </div>
-          <a href="/work/current">打开移动端</a>
+          <a href="/work/claim">打开移动端</a>
         </header>
         <main>
           <Outlet />

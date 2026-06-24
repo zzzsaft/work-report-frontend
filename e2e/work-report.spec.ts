@@ -9,7 +9,7 @@ async function completeCurrentOperation(page: Page) {
   await page.getByRole("button", { name: "确认完成报工" }).click();
 }
 
-test.describe("mobile reporting", () => {
+test.describe.skip("mobile reporting (v2 reserved)", () => {
   test.skip(({ isMobile }) => !isMobile, "mobile project only");
 
   test.beforeEach(async ({ page }) => {
@@ -82,34 +82,39 @@ test.describe("mobile claim operations", () => {
   test.skip(({ isMobile }) => !isMobile, "mobile project only");
 
   test.beforeEach(async ({ page }) => {
-    await page.goto("/work/operations");
+    await page.goto("/work/claim");
     await page.evaluate(() => localStorage.removeItem("work-report-mock-db-v3"));
     await page.reload();
   });
 
   test("claims an operation and allows removing it before start", async ({ page }) => {
-    await page.getByRole("button", { name: "领取" }).click();
+    await expect(page.getByRole("heading", { name: "最近可以领取的工序" })).toBeVisible();
+    await expect(page.getByText("法兰攻丝")).toBeVisible();
+    await expect(page.getByRole("button", { name: "人数已满" })).toBeDisabled();
+    await page.getByRole("button", { name: "可领取" }).click();
+    await expect(page.getByText("法兰攻丝")).not.toBeVisible();
+    await page.getByRole("button", { name: "全部" }).click();
     await page.getByRole("button", { name: "搜索" }).click();
     await page.getByRole("button", { name: /CP-JSJ-240623-07/ }).click();
     await page.getByRole("button", { name: /PART-COVER-002/ }).click();
     await page.getByRole("button", { name: "领取工序" }).click();
-    await expect(page.getByText("已加入工序清单")).toBeVisible();
-    await page.getByRole("button", { name: "去开始" }).click();
-    await page.goto("/work/operations");
-    await page.getByRole("button", { name: "未来" }).click();
-    await expect(page.getByText("端盖钻孔")).toBeVisible();
-    await page.getByRole("button", { name: "删除领取" }).click();
-    await expect(page.getByText("端盖钻孔")).not.toBeVisible();
+    await expect(page.getByText("已领取工序")).toBeVisible();
+    await expect(page.getByRole("button", { name: "去开始" })).not.toBeVisible();
+    await page.getByRole("button", { name: "查看已领取" }).click();
+    const claimedList = page.getByLabel("我的已领取工序");
+    await expect(claimedList.getByText("端盖钻孔")).toBeVisible();
+    await claimedList.getByRole("button", { name: "删除领取" }).click();
+    await expect(claimedList.getByText("端盖钻孔")).not.toBeVisible();
   });
 
-  test("filters history and loads more completed operations", async ({ page }) => {
-    await page.getByRole("button", { name: "历史" }).click();
-    await expect(page.getByLabel("历史工序时间筛选")).toContainText("近30天");
-    await expect(page.getByText("精铣平面")).not.toBeVisible();
-    await page.getByRole("button", { name: "加载更多历史数据" }).click();
-    await expect(page.getByText("精铣平面")).toBeVisible();
-    await page.getByRole("button", { name: "近7天" }).click();
-    await expect(page.getByText("清洗包装").first()).not.toBeVisible();
+  test("redirects v2 mobile reporting routes to claim page", async ({ page }) => {
+    for (const path of ["/work/current", "/work/operations", "/work/stats"]) {
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/work\/claim$/);
+      await expect(page.getByRole("heading", { name: "领取工序" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "开始作业" })).not.toBeVisible();
+      await expect(page.getByRole("button", { name: "结束并拍照" })).not.toBeVisible();
+    }
   });
 });
 
@@ -142,7 +147,7 @@ test.describe("admin console", () => {
   });
 });
 
-test.describe("work statistics", () => {
+test.describe.skip("work statistics (v2 reserved)", () => {
   test.skip(({ isMobile }) => !isMobile, "mobile project only");
 
   test("distinguishes overtime from regular hours", async ({ page }) => {

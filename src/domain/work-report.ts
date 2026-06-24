@@ -134,6 +134,7 @@ export interface ClaimableOperation {
   plannedQuantity: number;
   estimatedHours: number;
   claimedWorkers: number;
+  maxClaimWorkers?: number;
   status: "available" | "claimed" | "closed";
 }
 

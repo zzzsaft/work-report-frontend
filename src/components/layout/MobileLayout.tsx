@@ -1,10 +1,8 @@
-import { ClipboardList, ChartNoAxesColumnIncreasing, UserRound, Wrench } from "lucide-react";
+import { ClipboardList, UserRound } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 const navItems = [
-  { to: "/work/current", label: "当前工序", icon: Wrench },
-  { to: "/work/operations", label: "工序清单", icon: ClipboardList },
-  { to: "/work/stats", label: "我的统计", icon: ChartNoAxesColumnIncreasing },
+  { to: "/work/claim", label: "领取工序", icon: ClipboardList },
   { to: "/me", label: "我的", icon: UserRound },
 ];
 

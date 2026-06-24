@@ -5,6 +5,7 @@ import {
   RotateCcw, Search, Target, Trash2, UsersRound, X,
 } from "lucide-react";
 import { useLogout } from "@/hooks/useLogout";
+import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { canSwitchFromAssignment, canWorkerRemoveAssignment, formatDuration, getSessionElapsedSeconds, statusLabel, type ClaimableOperation, type ClaimablePart, type ClaimableProduct, type OperationAssignment } from "@/domain/work-report";
 import { createImagePreviews, filesToCompletionPhotos, revokeImagePreviews, selectImageFiles, type ImagePreview } from "@/utils/imageFiles";
@@ -18,8 +19,11 @@ function StatusPill({ status }: { status: OperationAssignment["status"] }) {
 }
 
 type HistoryRange = "7" | "30" | "60" | "all";
+type ClaimOperationFilter = "all" | "available" | "claimed";
 const historyRangeOptions: Array<[HistoryRange, string]> = [["7", "近7天"], ["30", "近30天"], ["60", "近60天"], ["all", "全部"]];
+const claimOperationFilterOptions: Array<[ClaimOperationFilter, string]> = [["all", "全部"], ["available", "可领取"], ["claimed", "已满"]];
 const historyPageSize = 5;
+const requireAuth = import.meta.env.VITE_REQUIRE_AUTH !== "false";
 const getAssignmentTime = (item: OperationAssignment) => new Date(item.session?.completedAt || item.plannedStart).getTime();
 const isInHistoryRange = (item: OperationAssignment, range: HistoryRange) => {
   if (range === "all") return true;
@@ -156,6 +160,30 @@ export function OperationsPage() {
   return <div className="standard-page"><PageHeader title="工序清单" subtitle="查看、领取和切换个人工序" />{error && <ErrorBanner message={error} retry={() => { clearError(); void loadAssignments(); }} />}<div className="segmented segmented-four">{([['history','历史'],['current','当前'],['future','未来'],['claim','领取']] as const).map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</div>{tab === "claim" ? <ClaimOperationsPanel loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); }} onGoStart={async (assignment) => { await switchCurrent(assignment); setTab("current"); }} onContinue={() => setClaimed(null)} /> : assignmentsLoading ? <LoadingState /> : <><div className="operation-list">{tab === "history" && <HistoryFilter range={historyRange} total={historyItems.length} onChange={setHistoryRange} />}{filtered.map((item) => <OperationCard key={item.id} item={item} removing={actionLoading} onRemove={() => void removeClaimedAssignment(item.id)} />)}{!filtered.length && <div className="empty-inline">暂无{tab === "history" ? "历史" : tab === "future" ? "未来" : "当前"}工序</div>}</div>{hasMoreHistory && <button className="load-more-button" onClick={() => setHistoryLimit((value) => value + historyPageSize)}>加载更多历史数据</button>}</>}</div>;
 }
 
+export function ClaimOperationsPage() {
+  const {
+    assignments, assignmentsLoading, actionLoading, claimLoading, claimProducts, claimParts, claimOperations, recentClaimOperations, error,
+    loadAssignments, removeClaimedAssignment, searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, clearError,
+  } = useWorkReportStore();
+  const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
+  const claimedListRef = useRef<HTMLElement>(null);
+  useEffect(() => { void loadAssignments(); void loadRecentClaimableOperations(); }, [loadAssignments, loadRecentClaimableOperations]);
+  const claimedAssignments = useMemo(() => assignments.filter((item) => item.source === "self_claimed" && item.status === "assigned"), [assignments]);
+  const viewClaimed = () => {
+    setClaimed(null);
+    window.setTimeout(() => claimedListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
+  return <div className="standard-page claim-page">
+    <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
+    {error && <ErrorBanner message={error} retry={() => { clearError(); void loadAssignments(); }} />}
+    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={viewClaimed} />
+    <section ref={claimedListRef} className="claimed-section" aria-label="我的已领取工序">
+      <div className="section-heading"><div><h2>我的已领取工序</h2><p>未开始的自领工序可以删除，报工功能将在 v2 开放。</p></div><button className="ghost-button" disabled={assignmentsLoading} onClick={() => void loadAssignments()}><RefreshCw />刷新</button></div>
+      {assignmentsLoading ? <LoadingState /> : <div className="operation-list">{claimedAssignments.map((item) => <OperationCard key={item.id} item={item} removing={actionLoading} onRemove={() => void removeClaimedAssignment(item.id)} />)}{!claimedAssignments.length && <div className="empty-inline">暂无已领取工序，请先搜索产品编号领取。</div>}</div>}
+    </section>
+  </div>;
+}
+
 function HistoryFilter({ range, total, onChange }: { range: HistoryRange; total: number; onChange: (range: HistoryRange) => void }) {
   return <section className="history-filter" aria-label="历史工序时间筛选"><div><strong>历史时间</strong><span>共 {total} 条</span></div><div>{historyRangeOptions.map(([key, label]) => <button key={key} className={range === key ? "active" : ""} onClick={() => onChange(key)}>{label}</button>)}</div></section>;
 }
@@ -165,30 +193,43 @@ function OperationCard({ item, removing, onRemove }: { item: OperationAssignment
 }
 
 function ClaimOperationsPanel({
-  loading, products, parts, operations, claimed, onSearch, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue,
+  mode = "v2", loading, products, parts, operations, recentOperations = [], claimed, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed,
 }: {
+  mode?: "v1" | "v2";
   loading: boolean;
   products: ClaimableProduct[];
   parts: ClaimablePart[];
   operations: ClaimableOperation[];
+  recentOperations?: ClaimableOperation[];
   claimed: OperationAssignment | null;
   onSearch: (keyword: string) => Promise<void>;
+  onLoadRecent?: () => Promise<void>;
   onLoadParts: (productId: string) => Promise<void>;
   onLoadOperations: (partId: string) => Promise<void>;
   onClaim: (operationId: string) => Promise<void>;
-  onGoStart: (assignment: OperationAssignment) => Promise<void>;
+  onGoStart?: (assignment: OperationAssignment) => Promise<void>;
   onContinue: () => void;
+  onViewClaimed?: () => void;
 }) {
   const [keyword, setKeyword] = useState("CP-JSJ-240623-07");
   const [selectedProduct, setSelectedProduct] = useState<ClaimableProduct | null>(null);
   const [selectedPart, setSelectedPart] = useState<ClaimablePart | null>(null);
+  const [filter, setFilter] = useState<ClaimOperationFilter>("all");
+  const sourceOperations = selectedPart ? operations : recentOperations;
+  const filteredOperations = sourceOperations.filter((item) => filter === "all" ? true : item.status === filter);
+  const operationHeading = selectedPart ? "3 可领取工序" : "最近可以领取的工序";
   const search = async () => {
     setSelectedProduct(null);
     setSelectedPart(null);
     await onSearch(keyword);
   };
-  if (claimed) return <section className="claim-success"><CheckCircle2 /><h2>已加入工序清单</h2><p>{claimed.productCode} · {claimed.partCode}</p><strong>{claimed.operationName}</strong><div><button className="primary-button" onClick={() => void onGoStart(claimed)}><Play />去开始</button><button className="ghost-button" onClick={onContinue}>继续领取</button></div></section>;
-  return <section className="claim-panel"><label className="claim-search"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入产品编号搜索" /><button disabled={loading || !keyword.trim()} onClick={() => void search()}>搜索</button></label><p className="claim-help">先搜产品编号，再选部件编号，最后领取具体工序。</p>{loading && <div className="claim-loading"><span className="spinner" />正在读取...</div>}<div className="claim-columns"><div><h2>1 产品编号</h2>{products.map((item) => <button key={item.id} className={selectedProduct?.id === item.id ? "selected" : ""} onClick={() => { setSelectedProduct(item); setSelectedPart(null); void onLoadParts(item.id); }}><strong>{item.productCode}</strong><span>{item.productName}</span><small>{item.orderNo} · 剩余 {item.remainingQuantity} 件</small></button>)}</div><div><h2>2 部件编号</h2>{parts.map((item) => <button key={item.id} className={selectedPart?.id === item.id ? "selected" : ""} onClick={() => { setSelectedPart(item); void onLoadOperations(item.id); }}><strong>{item.partCode}</strong><span>{item.partName}</span><small>{item.operationCount} 道工序 · 剩余 {item.remainingQuantity} 件</small></button>)}</div></div><div className="claim-operation-list"><h2>3 可领取工序</h2>{operations.map((item) => <article key={item.id}><div><strong>{item.operationCode} · {item.operationName}</strong><span>{item.status === "available" ? "可领取" : "不可领取"}</span></div><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.claimedWorkers} 人</dd></div></dl><button className="primary-button" disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>领取工序</button></article>)}{!operations.length && <div className="empty-inline">请选择部件查看工序</div>}</div></section>;
+  const loadRecent = async () => {
+    setSelectedProduct(null);
+    setSelectedPart(null);
+    await onLoadRecent?.();
+  };
+  if (claimed) return <section className="claim-success"><CheckCircle2 /><h2>{mode === "v1" ? "已领取工序" : "已加入工序清单"}</h2><p>{claimed.productCode} · {claimed.partCode}</p><strong>{claimed.operationName}</strong><div>{mode === "v1" ? <button className="primary-button" onClick={onViewClaimed}><ClipboardList />查看已领取</button> : <button className="primary-button" onClick={() => void onGoStart?.(claimed)}><Play />去开始</button>}<button className="ghost-button" onClick={onContinue}>继续领取</button></div></section>;
+  return <section className="claim-panel"><label className="claim-search"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入产品编号搜索" /><button disabled={loading || !keyword.trim()} onClick={() => void search()}>搜索</button></label><div className="claim-tools"><button className="ghost-button" disabled={loading} onClick={() => void loadRecent()}><RefreshCw />最近工序</button><div className="claim-filter" aria-label="领取状态筛选">{claimOperationFilterOptions.map(([key, label]) => <button key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}</div></div><p className="claim-help">可以搜索产品编号，也可以直接查看最近可领取的工序；已满工序会显示但不能领取。</p>{loading && <div className="claim-loading"><span className="spinner" />正在读取...</div>}<div className="claim-columns"><div><h2>1 产品编号</h2>{products.map((item) => <button key={item.id} className={selectedProduct?.id === item.id ? "selected" : ""} onClick={() => { setSelectedProduct(item); setSelectedPart(null); void onLoadParts(item.id); }}><strong>{item.productCode}</strong><span>{item.productName}</span><small>{item.orderNo} · 剩余 {item.remainingQuantity} 件</small></button>)}</div><div><h2>2 部件编号</h2>{parts.map((item) => <button key={item.id} className={selectedPart?.id === item.id ? "selected" : ""} onClick={() => { setSelectedPart(item); void onLoadOperations(item.id); }}><strong>{item.partCode}</strong><span>{item.partName}</span><small>{item.operationCount} 道工序 · 剩余 {item.remainingQuantity} 件</small></button>)}</div></div><div className="claim-operation-list"><h2>{operationHeading}</h2>{filteredOperations.map((item) => <article key={item.id} className={item.status !== "available" ? "disabled" : ""}><div><strong>{item.operationCode} · {item.operationName}</strong><span className={`claim-status-${item.status}`}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{item.productCode} · {item.partCode}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><button className="primary-button" disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</button></article>)}{!filteredOperations.length && <div className="empty-inline">{selectedPart ? "当前筛选下暂无工序" : "暂无最近工序，可搜索产品编号查看。"}</div>}</div></section>;
 }
 
 export function StatsPage() {
@@ -206,5 +247,9 @@ function PageHeader({ title, subtitle }: { title: string; subtitle: string }) { 
 
 export function ProfilePage() {
   const logout = useLogout();
-  return <div className="standard-page profile-page"><PageHeader title="我的" subtitle="个人信息与演示设置" /><section className="profile-card"><div className="profile-avatar">张</div><div><h2>张师傅</h2><p>生产一组 · 白班</p></div></section><section className="profile-menu"><button><UsersRound /><span><strong>工号</strong><small>EMP-20240018</small></span></button><button><CalendarClock /><span><strong>当前班次</strong><small>08:00 - 20:00</small></span></button></section><button className="logout-action" onClick={logout}><LogOut />退出登录</button></div>;
+  const { name, userId } = useAuthStore();
+  const displayName = name?.trim() || (requireAuth ? "未提供姓名" : "张师傅");
+  const displayUserId = userId?.trim() || (requireAuth ? "未提供工号" : "EMP-20240018");
+  const avatarText = Array.from(displayName)[0] || "用";
+  return <div className="standard-page profile-page"><PageHeader title="我的" subtitle={requireAuth ? "企业微信登录信息" : "个人信息与演示设置"} /><section className="profile-card"><div className="profile-avatar">{avatarText}</div><div><h2>{displayName}</h2><p>{requireAuth ? "企业微信已验证" : "生产一组 · 白班"}</p></div></section><section className="profile-menu"><button><UsersRound /><span><strong>工号</strong><small>{displayUserId}</small></span></button>{requireAuth ? <button><CheckCircle2 /><span><strong>登录状态</strong><small>已验证</small></span></button> : <button><CalendarClock /><span><strong>当前班次</strong><small>08:00 - 20:00</small></span></button>}</section><button className="logout-action" onClick={logout}><LogOut />退出登录</button></div>;
 }
