@@ -1,14 +1,14 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HotTable } from "@handsontable/react-wrapper";
 import { registerAllModules } from "handsontable/registry";
 import type Handsontable from "handsontable/base";
 import "handsontable/styles/handsontable.min.css";
 import "handsontable/styles/ht-theme-main.min.css";
-import { AlertTriangle, CheckCircle2, Clock3, Factory, RefreshCw, Search, Timer, Trash2, Upload, UserPlus, UsersRound, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Factory, RefreshCw, Search, Timer, Trash2, Upload, UserPlus, UsersRound, Wrench } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { workReportRepository } from "@/api/services/workReport.service";
 import { isMockMode } from "@/api/services/workReport.service";
-import { canWorkerRemoveAssignment, statusLabel, type ClaimableOperation, type LeaderImportDraft, type DashboardSummary, type LaborStatistics, type OperationAssignment, type ProductionException, type ReportRecord, type WorkOrder } from "@/domain/work-report";
+import { canWorkerRemoveAssignment, statusLabel, type ClaimableOperation, type ClaimablePart, type LeaderImportDraft, type DashboardSummary, type LaborStatistics, type OperationAssignment, type ProductionException, type ReportRecord, type WorkerSummary, type WorkOrder } from "@/domain/work-report";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { getErrorMessage } from "@/utils/errors";
 
@@ -17,7 +17,7 @@ registerAllModules();
 function AdminHeader({ title, description, action }: { title: string; description: string; action?: ReactNode }) { return <header className="admin-page-header"><div><h1>{title}</h1><p>{description}</p></div>{action}</header>; }
 function LoadingTable() { return <div className="admin-loading"><span className="spinner" />正在读取生产数据...</div>; }
 function AdminError({ message, retry }: { message: string; retry: () => void }) { return <div className="admin-loading"><span>{message}</span><button className="table-action" onClick={retry}>重试</button></div>; }
-function AdminStatus({ status }: { status: string }) { return <span className={`admin-status ${status}`}>{statusLabel[status as keyof typeof statusLabel] || ({ in_progress: "生产中", completed: "已完成", pending: "待生产", exception: "异常" }[status] || status)}</span>; }
+function AdminStatus({ status }: { status: string }) { return <span className={`admin-status ${status}`}>{statusLabel[status as keyof typeof statusLabel] || ({ in_progress: "生产中", completed: "已完成", pending: "待生产", exception: "异常", available: "可分配", claimed: "已满", closed: "已关闭" }[status] || status)}</span>; }
 
 const importColumns = [
   { key: "productCode", title: "产品号", width: 180 },
@@ -83,11 +83,123 @@ function Kpi({ icon: Icon, label, value, unit, danger }: { icon: typeof Factory;
 
 export function OrdersPage() {
   const [search, setSearch] = useState("");
+  const [expandedOrderId, setExpandedOrderId] = useState("");
+  const [selectedPartId, setSelectedPartId] = useState("");
+  const [parts, setParts] = useState<Record<string, ClaimablePart[]>>({});
+  const [operations, setOperations] = useState<Record<string, ClaimableOperation[]>>({});
+  const [panelLoading, setPanelLoading] = useState("");
+  const [message, setMessage] = useState("");
   const load = useCallback(() => workReportRepository.getOrders(), []);
   const { data: orders = [], loading, error, reload } = useAsyncResource<WorkOrder[]>(load);
   const filtered = orders.filter((item) => `${item.orderNo}${item.productName}${item.productCode}`.toLowerCase().includes(search.toLowerCase()));
+  const openOrder = async (order: WorkOrder) => {
+    setMessage("");
+    const nextOpen = expandedOrderId === order.id ? "" : order.id;
+    setExpandedOrderId(nextOpen);
+    setSelectedPartId("");
+    if (!nextOpen || parts[order.id]) return;
+    setPanelLoading(order.id);
+    try {
+      const products = await workReportRepository.searchClaimableProducts(order.orderNo);
+      const product = products.find((item) => item.orderNo === order.orderNo || item.productCode === order.productCode) || products[0];
+      const loadedParts = product ? await workReportRepository.getClaimableParts(product.id) : [];
+      setParts((current) => ({ ...current, [order.id]: loadedParts }));
+      const firstPart = loadedParts[0];
+      if (firstPart) {
+        setSelectedPartId(firstPart.id);
+        if (!operations[firstPart.id]) {
+          const loadedOperations = await workReportRepository.getClaimableOperations(firstPart.id);
+          setOperations((current) => ({ ...current, [firstPart.id]: loadedOperations }));
+        }
+      }
+    } catch (err) {
+      setMessage(getErrorMessage(err));
+    } finally {
+      setPanelLoading("");
+    }
+  };
+  const choosePart = async (partId: string) => {
+    setSelectedPartId(partId);
+    if (operations[partId]) return;
+    setPanelLoading(partId);
+    try {
+      const loadedOperations = await workReportRepository.getClaimableOperations(partId);
+      setOperations((current) => ({ ...current, [partId]: loadedOperations }));
+    } catch (err) {
+      setMessage(getErrorMessage(err));
+    } finally {
+      setPanelLoading("");
+    }
+  };
+  const assignOperation = async (operation: ClaimableOperation, worker: WorkerSummary) => {
+    setMessage("");
+    await workReportRepository.adminAssignOperation({ operationId: operation.id, workerId: worker.id, workerName: worker.name });
+    setMessage(`已将 ${operation.operationName} 分配给 ${worker.name}`);
+    const loadedOperations = await workReportRepository.getClaimableOperations(operation.partId);
+    setOperations((current) => ({ ...current, [operation.partId]: loadedOperations }));
+  };
   if (error && !loading) return <><AdminHeader title="工单与工序" description="查看源工单进度并管理人员分配" action={<SearchBox value={search} onChange={setSearch} />} /><section className="admin-panel"><AdminError message={error} retry={() => void reload()} /></section></>;
-  return <><AdminHeader title="工单与工序" description="查看源工单进度并管理人员分配" action={<SearchBox value={search} onChange={setSearch} />} /><section className="admin-panel">{loading ? <LoadingTable /> : <div className="table-wrap"><table><thead><tr><th>工单号</th><th>产品</th><th>计划数量</th><th>完成进度</th><th>交期</th><th>状态</th><th>操作</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productName}<small>{item.productCode}</small></td><td>{item.plannedQuantity} 件</td><td><div className="progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span>{item.progress}%</div></td><td>{item.dueDate}</td><td><AdminStatus status={item.status} /></td><td><button className="table-action">查看工序</button></td></tr>)}</tbody></table></div>}</section></>;
+  return <><AdminHeader title="工单管理" description="搜索工单，展开工序并手动分配生产人员" action={<SearchBox value={search} onChange={setSearch} placeholder="搜索工单、产品编号或名称" />} />{message && <div className="admin-message">{message}</div>}<section className="admin-panel order-management-panel">{loading ? <LoadingTable /> : <div className="order-management-list">{filtered.map((item) => {
+    const orderParts = parts[item.id] || [];
+    const activePart = selectedPartId && orderParts.some((part) => part.id === selectedPartId) ? selectedPartId : orderParts[0]?.id || "";
+    const activeOperations = activePart ? operations[activePart] || [] : [];
+    const isOpen = expandedOrderId === item.id;
+    return <article className="order-management-card" key={item.id}><button className="order-summary-row" onClick={() => void openOrder(item)} aria-expanded={isOpen}><div><strong>{item.orderNo}</strong><span>{item.productName} · {item.productCode}</span></div><div className="progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span>{item.progress}%</div><AdminStatus status={item.status} /><ChevronDown className={isOpen ? "rotated" : ""} /></button>{isOpen && <div className="order-operation-panel">{panelLoading === item.id ? <LoadingTable /> : <><div className="part-tabs">{orderParts.map((part) => <button key={part.id} className={activePart === part.id ? "active" : ""} onClick={() => void choosePart(part.id)}><strong>{part.partCode}</strong><span>{part.partName}</span></button>)}</div>{panelLoading === activePart ? <LoadingTable /> : activeOperations.length ? <div className="operation-assignment-list">{activeOperations.map((operation) => <OperationAssignRow key={operation.id} operation={operation} onAssign={assignOperation} />)}</div> : <div className="empty-inline">当前工单暂无可分配工序。</div>}</>}</div>}</article>;
+  })}{!filtered.length && <div className="empty-inline">没有匹配的工单。</div>}</div>}</section></>;
+}
+
+function OperationAssignRow({ operation, onAssign }: { operation: ClaimableOperation; onAssign: (operation: ClaimableOperation, worker: WorkerSummary) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const full = operation.maxClaimWorkers ? operation.claimedWorkers >= operation.maxClaimWorkers : false;
+  const disabled = operation.status !== "available" || full;
+  return <article className="operation-assignment-row"><div><strong>{operation.operationCode} · {operation.operationName}</strong><span>{operation.partName} · {operation.plannedQuantity} 件 · {operation.estimatedHours} 小时</span></div><div className="operation-capacity"><span>{operation.claimedWorkers}{operation.maxClaimWorkers ? `/${operation.maxClaimWorkers}` : ""} 人</span><AdminStatus status={operation.status} /></div><button className="admin-primary-action slim" disabled={disabled} onClick={() => setOpen((value) => !value)}><UserPlus />分配人员</button>{open && !disabled && <WorkerPicker operation={operation} onAssigned={async (worker) => { await onAssign(operation, worker); setOpen(false); }} />}</article>;
+}
+
+function WorkerPicker({ operation, onAssigned }: { operation: ClaimableOperation; onAssigned: (worker: WorkerSummary) => Promise<void> }) {
+  const pageSize = 5;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const requestRef = useRef(0);
+  const [keyword, setKeyword] = useState("");
+  const [workers, setWorkers] = useState<WorkerSummary[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [assigningId, setAssigningId] = useState("");
+  const [error, setError] = useState("");
+  const loadWorkers = useCallback(async (nextPage: number, mode: "replace" | "append") => {
+    const requestId = ++requestRef.current;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await workReportRepository.searchWorkers(keyword, nextPage, pageSize);
+      if (requestId !== requestRef.current) return;
+      setWorkers((current) => mode === "append" ? [...current, ...result.items] : result.items);
+      setPage(nextPage);
+      setHasMore(result.hasMore);
+    } catch (err) {
+      if (requestId === requestRef.current) setError(getErrorMessage(err));
+    } finally {
+      if (requestId === requestRef.current) setLoading(false);
+    }
+  }, [keyword]);
+  useEffect(() => { void loadWorkers(1, "replace"); }, [loadWorkers]);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && !loading) void loadWorkers(page + 1, "append");
+    }, { rootMargin: "80px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadWorkers, loading, page]);
+  const assign = async (worker: WorkerSummary) => {
+    setAssigningId(worker.id);
+    setError("");
+    try { await onAssigned(worker); }
+    catch (err) { setError(getErrorMessage(err)); }
+    finally { setAssigningId(""); }
+  };
+  return <div className="worker-picker"><div className="worker-picker-head"><label className="search-box compact"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜姓名、工号、首字母" /></label><span>{operation.operationCode}</span></div><div className="worker-result-list">{workers.map((worker) => <button key={worker.id} disabled={!!assigningId} onClick={() => void assign(worker)}><span className="worker-avatar-mini">{worker.name.slice(0, 1)}</span><div><strong>{worker.name}</strong><small>{worker.employeeNo} · {worker.nameInitials.toUpperCase()} · {worker.teamName}</small></div><em>{worker.activeAssignmentCount} 道</em>{assigningId === worker.id ? <span className="spinner small" /> : <Check />}</button>)}{!workers.length && !loading && <div className="empty-inline">没有找到人员。</div>}<div ref={sentinelRef} className="lazy-load-state">{loading ? "正在加载人员..." : hasMore ? "继续下滑加载更多人员" : "人员已显示完"}</div></div>{error && <div className="admin-message danger">{error}</div>}</div>;
 }
 
 export function LeaderImportPage() {
@@ -134,8 +246,7 @@ export function AssignmentAdminPage() {
   const [selectedProduct, setSelectedProduct] = useState("");
   const [selectedPart, setSelectedPart] = useState("");
   const [operations, setOperations] = useState<ClaimableOperation[]>([]);
-  const [workerId, setWorkerId] = useState("EMP-20240018");
-  const [workerName, setWorkerName] = useState("张师傅");
+  const [assignTargetId, setAssignTargetId] = useState("");
   const [message, setMessage] = useState("");
   const loadProducts = useCallback(() => workReportRepository.searchClaimableProducts(keyword), [keyword]);
   const { data: products = [], loading: productsLoading, reload } = useAsyncResource(loadProducts);
@@ -148,12 +259,15 @@ export function AssignmentAdminPage() {
   const { data: parts = [] } = useAsyncResource(useCallback(() => selectedProduct ? workReportRepository.getClaimableParts(selectedProduct) : Promise.resolve([]), [selectedProduct]));
   const choosePart = async (partId: string) => {
     setSelectedPart(partId);
+    setAssignTargetId("");
     setOperations(await workReportRepository.getClaimableOperations(partId));
   };
-  const assign = async (operationId: string) => {
+  const assign = async (operation: ClaimableOperation, worker: WorkerSummary) => {
     setMessage("");
-    await workReportRepository.adminAssignOperation({ operationId, workerId, workerName });
-    setMessage(`已分配给 ${workerName}`);
+    await workReportRepository.adminAssignOperation({ operationId: operation.id, workerId: worker.id, workerName: worker.name });
+    setMessage(`已将 ${operation.operationName} 分配给 ${worker.name}`);
+    setAssignTargetId("");
+    setOperations(await workReportRepository.getClaimableOperations(operation.partId));
     await reloadAssignments();
   };
   const forceRemove = async (assignmentId: string) => {
@@ -162,7 +276,7 @@ export function AssignmentAdminPage() {
     setMessage("已由高级后台移除，并写入报工记录");
     await reloadAssignments();
   };
-  return <><AdminHeader title="人员工序分配" description="高级后台可分配工序，也可处理已开始或不可自删的工序" action={<div className="admin-inline-actions"><SearchBox value={keyword} onChange={setKeyword} /><button className="admin-primary-action" onClick={() => void reload()}><Search />搜索</button></div>} />{message && <div className="admin-message">{message}</div>}<div className="assignment-admin-grid"><section className="admin-panel settings-card"><div className="settings-icon"><UserPlus /></div><h2>分配对象</h2><label className="admin-field">工号<input value={workerId} onChange={(event) => setWorkerId(event.target.value)} /></label><label className="admin-field">姓名<input value={workerName} onChange={(event) => setWorkerName(event.target.value)} /></label><h2>产品与部件</h2>{productsLoading ? <LoadingTable /> : <div className="admin-choice-list">{products.map((item) => <button key={item.id} className={selectedProduct === item.id ? "selected" : ""} onClick={() => void loadParts(item.id)}><strong>{item.productCode}</strong><span>{item.productName}</span></button>)}</div>}<div className="admin-choice-list compact">{parts.map((item) => <button key={item.id} className={selectedPart === item.id ? "selected" : ""} onClick={() => void choosePart(item.id)}><strong>{item.partCode}</strong><span>{item.partName}</span></button>)}</div></section><section className="admin-panel"><div className="table-wrap"><table><thead><tr><th>工序</th><th>部件</th><th>数量</th><th>工时</th><th>已领</th><th>操作</th></tr></thead><tbody>{operations.map((item) => <tr key={item.id}><td><strong>{item.operationCode}</strong><small>{item.operationName}</small></td><td>{item.partCode}</td><td>{item.plannedQuantity}</td><td>{item.estimatedHours}</td><td>{item.claimedWorkers}</td><td><button className="table-action" onClick={() => void assign(item.id)}>分配给人员</button></td></tr>)}</tbody></table></div></section></div><section className="admin-panel chart-panel"><div className="panel-heading"><div><h2>当前人员工序</h2><p>高级后台可移除已开始、自领或后台分配的异常工序</p></div></div>{assignmentsLoading ? <LoadingTable /> : <div className="table-wrap"><table><thead><tr><th>工单</th><th>产品/部件</th><th>工序</th><th>人员</th><th>来源</th><th>状态</th><th>员工可删</th><th>高级操作</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productCode}<small>{item.partCode}</small></td><td>{item.operationName}</td><td>{item.collaborators.join(" / ")}</td><td>{item.source === "self_claimed" ? "自主领取" : "后台分配"}</td><td><AdminStatus status={item.status} /></td><td>{canWorkerRemoveAssignment(item) ? "是" : "否"}</td><td><button className="table-action danger-action" onClick={() => void forceRemove(item.id)}><Trash2 />移除</button></td></tr>)}</tbody></table></div>}</section></>;
+  return <><AdminHeader title="人员工序分配" description="高级后台可分配工序，也可处理已开始或不可自删的工序" action={<div className="admin-inline-actions"><SearchBox value={keyword} onChange={setKeyword} /><button className="admin-primary-action" onClick={() => void reload()}><Search />搜索</button></div>} />{message && <div className="admin-message">{message}</div>}<div className="assignment-admin-grid"><section className="admin-panel settings-card"><div className="settings-icon"><UserPlus /></div><h2>产品与部件</h2>{productsLoading ? <LoadingTable /> : <div className="admin-choice-list">{products.map((item) => <button key={item.id} className={selectedProduct === item.id ? "selected" : ""} onClick={() => void loadParts(item.id)}><strong>{item.productCode}</strong><span>{item.productName}</span></button>)}</div>}<div className="admin-choice-list compact">{parts.map((item) => <button key={item.id} className={selectedPart === item.id ? "selected" : ""} onClick={() => void choosePart(item.id)}><strong>{item.partCode}</strong><span>{item.partName}</span></button>)}</div></section><section className="admin-panel"><div className="table-wrap"><table><thead><tr><th>工序</th><th>部件</th><th>数量</th><th>工时</th><th>已领</th><th>操作</th></tr></thead><tbody>{operations.map((item) => <Fragment key={item.id}><tr><td><strong>{item.operationCode}</strong><small>{item.operationName}</small></td><td>{item.partCode}</td><td>{item.plannedQuantity}</td><td>{item.estimatedHours}</td><td>{item.claimedWorkers}</td><td><button className="table-action" disabled={item.status !== "available"} onClick={() => setAssignTargetId((value) => value === item.id ? "" : item.id)}>选择人员</button></td></tr>{assignTargetId === item.id && <tr><td colSpan={6}><WorkerPicker operation={item} onAssigned={(worker) => assign(item, worker)} /></td></tr>}</Fragment>)}{!operations.length && <tr><td colSpan={6}>请选择产品和部件后查看工序。</td></tr>}</tbody></table></div></section></div><section className="admin-panel chart-panel"><div className="panel-heading"><div><h2>当前人员工序</h2><p>高级后台可移除已开始、自领或后台分配的异常工序</p></div></div>{assignmentsLoading ? <LoadingTable /> : <div className="table-wrap"><table><thead><tr><th>工单</th><th>产品/部件</th><th>工序</th><th>人员</th><th>来源</th><th>状态</th><th>员工可删</th><th>高级操作</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productCode}<small>{item.partCode}</small></td><td>{item.operationName}</td><td>{item.collaborators.join(" / ")}</td><td>{item.source === "self_claimed" ? "自主领取" : "后台分配"}</td><td><AdminStatus status={item.status} /></td><td>{canWorkerRemoveAssignment(item) ? "是" : "否"}</td><td><button className="table-action danger-action" onClick={() => void forceRemove(item.id)}><Trash2 />移除</button></td></tr>)}</tbody></table></div>}</section></>;
 }
 
 export function ReportsPage() {
@@ -191,7 +305,7 @@ export function ExceptionsPage() {
 export function SettingsPage() {
   const [resetting, setResetting] = useState(false); const [message, setMessage] = useState("");
   const reset = async (scenario: "assigned" | "running" | "paused") => { setResetting(true); setMessage(""); try { await workReportRepository.resetDemo?.(scenario); setMessage("演示数据已重置，移动端刷新后生效"); } catch (error) { setMessage(getErrorMessage(error)); } finally { setResetting(false); } };
-  return <><AdminHeader title="系统设置" description="接口环境、统计口径与演示数据" /><div className="settings-grid"><section className="admin-panel settings-card"><div className="settings-icon"><Wrench /></div><h2>业务 API</h2><dl><div><dt>当前模式</dt><dd><span className={isMockMode ? "mode-mock" : "mode-real"}>{isMockMode ? "Mock 演示" : "真实接口"}</span></dd></div><div><dt>业务服务地址</dt><dd>{import.meta.env.VITE_WORK_REPORT_API_BASE_URL || "未配置"}</dd></div><div><dt>认证服务</dt><dd>独立 authClient，不受业务配置影响</dd></div></dl></section><section className="admin-panel settings-card"><div className="settings-icon orange"><RefreshCw /></div><h2>重置演示场景</h2><p>快速切换当前工序状态，用于演示完整报工流程。</p><div className="scenario-buttons"><button disabled={resetting} onClick={() => void reset("assigned")}>待开始</button><button disabled={resetting} onClick={() => void reset("running")}>进行中</button><button disabled={resetting} onClick={() => void reset("paused")}>已暂停</button></div>{message && <div className="success-message"><CheckCircle2 />{message}</div>}</section><section className="admin-panel settings-card"><div className="settings-icon"><Clock3 /></div><h2>统计口径</h2><p>正常班次：08:00 - 17:00</p><p>超过班次的有效报工时间计入加班，最终口径以后端返回为准。</p></section></div></>;
+  return <><AdminHeader title="系统设置" description="接口环境、统计口径与演示数据" /><div className="settings-grid"><section className="admin-panel settings-card"><div className="settings-icon"><Wrench /></div><h2>业务 API</h2><dl><div><dt>当前模式</dt><dd><span className={isMockMode ? "mode-mock" : "mode-real"}>{isMockMode ? "Mock 演示" : "真实接口"}</span></dd></div><div><dt>业务服务地址</dt><dd>{import.meta.env.VITE_WORK_REPORT_API_BASE_URL || "未配置"}</dd></div><div><dt>认证服务</dt><dd>独立 authClient，不受业务配置影响</dd></div></dl></section><section className="admin-panel settings-card"><div className="settings-icon orange"><RefreshCw /></div><h2>重置演示场景</h2><p>快速切换当前工序状态，用于演示完整报工流程。</p><div className="scenario-buttons"><button disabled={resetting} onClick={() => void reset("assigned")}>待开始</button><button disabled={resetting} onClick={() => void reset("running")}>进行中</button><button disabled={resetting} onClick={() => void reset("paused")}>已暂停</button></div>{message && <div className="success-message"><CheckCircle2 />{message}</div>}</section><section className="admin-panel settings-card"><div className="settings-icon"><Clock3 /></div><h2>统计口径</h2><p>v1：领取或分配后即计入计划工时。</p><p>后续完整报工版本再按实际开始、暂停、完工记录计算有效工时。</p></section></div></>;
 }
 
-function SearchBox({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <label className="search-box"><Search /><input value={value} onChange={(e) => onChange(e.target.value)} placeholder="搜索工单、产品或人员" /></label>; }
+function SearchBox({ value, onChange, placeholder = "搜索工单、产品或人员" }: { value: string; onChange: (value: string) => void; placeholder?: string }) { return <label className="search-box"><Search /><input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} /></label>; }

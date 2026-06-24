@@ -10,6 +10,7 @@ import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { canSwitchFromAssignment, canWorkerRemoveAssignment, formatDuration, getSessionElapsedSeconds, statusLabel, type ClaimableOperation, type ClaimablePart, type ClaimableProduct, type OperationAssignment } from "@/domain/work-report";
 import { createImagePreviews, filesToCompletionPhotos, revokeImagePreviews, selectImageFiles, type ImagePreview } from "@/utils/imageFiles";
 import { getErrorMessage } from "@/utils/errors";
+import { useNavigate } from "react-router-dom";
 
 function LoadingState() { return <div className="page-state"><span className="spinner" /><p>正在加载报工数据...</p></div>; }
 function ErrorBanner({ message, retry }: { message: string; retry?: () => void }) { return <div className="error-banner"><CircleAlert /><span>{message}</span>{retry && <button onClick={retry}>重试</button>}</div>; }
@@ -18,17 +19,30 @@ function StatusPill({ status }: { status: OperationAssignment["status"] }) {
   return <span className={`status-pill status-${status}`}><span />{statusLabel[status]}</span>;
 }
 
-type HistoryRange = "7" | "30" | "60" | "all";
 type ClaimOperationFilter = "all" | "available" | "claimed";
-const historyRangeOptions: Array<[HistoryRange, string]> = [["7", "近7天"], ["30", "近30天"], ["60", "近60天"], ["all", "全部"]];
+type ClaimPanelView = "search" | "recent";
+type ClaimRecentDateFilter = "today" | "all";
+type OperationListRange = "today" | "7" | "30" | "all";
 const claimOperationFilterOptions: Array<[ClaimOperationFilter, string]> = [["all", "全部"], ["available", "可领取"], ["claimed", "已满"]];
-const historyPageSize = 5;
+const claimRecentStatusOptions: Array<[Exclude<ClaimOperationFilter, "claimed">, string]> = [["available", "可领取"], ["all", "全部"]];
+const operationListRangeOptions: Array<[OperationListRange, string]> = [["today", "今天"], ["7", "最近7天"], ["30", "最近一个月"], ["all", "全部"]];
+const operationListPageSize = 6;
 const requireAuth = import.meta.env.VITE_REQUIRE_AUTH !== "false";
-const getAssignmentTime = (item: OperationAssignment) => new Date(item.session?.completedAt || item.plannedStart).getTime();
-const isInHistoryRange = (item: OperationAssignment, range: HistoryRange) => {
+const getTimeValue = (date?: string) => date ? new Date(date).getTime() : 0;
+const getAssignmentSortTime = (item: OperationAssignment) => getTimeValue(item.claimedAt) || getTimeValue(item.plannedStart);
+const isSameLocalDay = (left?: string | number | Date, right: string | number | Date = new Date()) => {
+  if (!left) return false;
+  const a = new Date(left);
+  const b = new Date(right);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return false;
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+};
+const isAssignmentInRange = (item: OperationAssignment, range: OperationListRange) => {
+  const time = getAssignmentSortTime(item);
+  if (!time) return range === "all";
+  if (range === "today") return isSameLocalDay(time);
   if (range === "all") return true;
-  const cutoff = Date.now() - Number(range) * 24 * 3600_000;
-  return getAssignmentTime(item) >= cutoff;
+  return time >= Date.now() - Number(range) * 24 * 3600_000;
 };
 
 function BottomSheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
@@ -145,51 +159,58 @@ function CompleteSheet({ onClose, onConfirm, loading }: { onClose: () => void; o
 
 export function OperationsPage() {
   const {
-    assignments, assignmentsLoading, actionLoading, claimLoading, claimProducts, claimParts, claimOperations, error,
-    loadAssignments, removeClaimedAssignment, searchClaimableProducts, loadClaimableParts, loadClaimableOperations, claimOperation, switchCurrent, clearError,
+    assignments, assignmentsLoading, actionLoading, error,
+    loadAssignments, removeClaimedAssignment, clearError,
   } = useWorkReportStore();
-  const [tab, setTab] = useState<"history" | "current" | "future" | "claim">("current");
-  const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
-  const [historyRange, setHistoryRange] = useState<HistoryRange>("30");
-  const [historyLimit, setHistoryLimit] = useState(historyPageSize);
+  const [range, setRange] = useState<OperationListRange>("today");
+  const [visibleCount, setVisibleCount] = useState(operationListPageSize);
+  const loaderRef = useRef<HTMLDivElement>(null);
   useEffect(() => { void loadAssignments(); }, [loadAssignments]);
-  useEffect(() => { setHistoryLimit(historyPageSize); }, [historyRange, tab]);
-  const historyItems = useMemo(() => assignments.filter((item) => item.status === "completed" && isInHistoryRange(item, historyRange)).sort((a, b) => getAssignmentTime(b) - getAssignmentTime(a)), [assignments, historyRange]);
-  const filtered = tab === "history" ? historyItems.slice(0, historyLimit) : assignments.filter((item) => tab === "future" ? item.status === "assigned" : ["running", "paused", "pending_submit"].includes(item.status));
-  const hasMoreHistory = tab === "history" && historyItems.length > historyLimit;
-  return <div className="standard-page"><PageHeader title="工序清单" subtitle="查看、领取和切换个人工序" />{error && <ErrorBanner message={error} retry={() => { clearError(); void loadAssignments(); }} />}<div className="segmented segmented-four">{([['history','历史'],['current','当前'],['future','未来'],['claim','领取']] as const).map(([key, label]) => <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}</div>{tab === "claim" ? <ClaimOperationsPanel loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); }} onGoStart={async (assignment) => { await switchCurrent(assignment); setTab("current"); }} onContinue={() => setClaimed(null)} /> : assignmentsLoading ? <LoadingState /> : <><div className="operation-list">{tab === "history" && <HistoryFilter range={historyRange} total={historyItems.length} onChange={setHistoryRange} />}{filtered.map((item) => <OperationCard key={item.id} item={item} removing={actionLoading} onRemove={() => void removeClaimedAssignment(item.id)} />)}{!filtered.length && <div className="empty-inline">暂无{tab === "history" ? "历史" : tab === "future" ? "未来" : "当前"}工序</div>}</div>{hasMoreHistory && <button className="load-more-button" onClick={() => setHistoryLimit((value) => value + historyPageSize)}>加载更多历史数据</button>}</>}</div>;
-}
-
-export function ClaimOperationsPage() {
-  const {
-    assignments, assignmentsLoading, actionLoading, claimLoading, claimProducts, claimParts, claimOperations, recentClaimOperations, error,
-    loadAssignments, removeClaimedAssignment, searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, clearError,
-  } = useWorkReportStore();
-  const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
-  const claimedListRef = useRef<HTMLElement>(null);
-  useEffect(() => { void loadAssignments(); void loadRecentClaimableOperations(); }, [loadAssignments, loadRecentClaimableOperations]);
-  const claimedAssignments = useMemo(() => assignments.filter((item) => item.source === "self_claimed" && item.status === "assigned"), [assignments]);
-  const viewClaimed = () => {
-    setClaimed(null);
-    window.setTimeout(() => claimedListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-  };
-  return <div className="standard-page claim-page">
-    <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
+  useEffect(() => { setVisibleCount(operationListPageSize); }, [range]);
+  const filteredAssignments = useMemo(() => assignments
+    .filter((item) => item.status !== "cancelled" && item.status !== "completed" && isAssignmentInRange(item, range))
+    .sort((a, b) => getAssignmentSortTime(b) - getAssignmentSortTime(a)), [assignments, range]);
+  const visibleAssignments = filteredAssignments.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredAssignments.length;
+  useEffect(() => {
+    const node = loaderRef.current;
+    if (!node || !hasMore) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((value) => Math.min(value + operationListPageSize, filteredAssignments.length));
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [filteredAssignments.length, hasMore]);
+  return <div className="standard-page">
+    <PageHeader title="工序清单" subtitle="查看自己已领取和已分配的工序" />
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadAssignments(); }} />}
-    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={viewClaimed} />
-    <section ref={claimedListRef} className="claimed-section" aria-label="我的已领取工序">
-      <div className="section-heading"><div><h2>我的已领取工序</h2><p>未开始的自领工序可以删除，报工功能将在 v2 开放。</p></div><button className="ghost-button" disabled={assignmentsLoading} onClick={() => void loadAssignments()}><RefreshCw />刷新</button></div>
-      {assignmentsLoading ? <LoadingState /> : <div className="operation-list">{claimedAssignments.map((item) => <OperationCard key={item.id} item={item} removing={actionLoading} onRemove={() => void removeClaimedAssignment(item.id)} />)}{!claimedAssignments.length && <div className="empty-inline">暂无已领取工序，请先搜索产品编号领取。</div>}</div>}
+    <section className="claimed-section" aria-label="工序清单">
+      <div className="section-heading"><div><h2>我的工序</h2><p>v1 仅展示领取结果，报工状态流转将在后续版本开放。</p></div><button className="ghost-button" disabled={assignmentsLoading} onClick={() => void loadAssignments()}><RefreshCw />刷新</button></div>
+      <div className="history-filter operation-range-filter" aria-label="工序清单时间筛选"><div><strong>时间范围</strong><span>共 {filteredAssignments.length} 条</span></div><div>{operationListRangeOptions.map(([key, label]) => <button key={key} className={range === key ? "active" : ""} onClick={() => setRange(key)}>{label}</button>)}</div></div>
+      {assignmentsLoading ? <LoadingState /> : <><div className="operation-list">{visibleAssignments.map((item) => <OperationCard key={item.id} item={item} removing={actionLoading} onRemove={() => void removeClaimedAssignment(item.id)} v1Status />)}{!visibleAssignments.length && <div className="empty-inline">当前时间范围暂无已领取工序。</div>}</div>{filteredAssignments.length > 0 && <div ref={loaderRef} className="lazy-load-state">{hasMore ? "继续下滑加载更多" : "已显示全部"}</div>}</>}
     </section>
   </div>;
 }
 
-function HistoryFilter({ range, total, onChange }: { range: HistoryRange; total: number; onChange: (range: HistoryRange) => void }) {
-  return <section className="history-filter" aria-label="历史工序时间筛选"><div><strong>历史时间</strong><span>共 {total} 条</span></div><div>{historyRangeOptions.map(([key, label]) => <button key={key} className={range === key ? "active" : ""} onClick={() => onChange(key)}>{label}</button>)}</div></section>;
+export function ClaimOperationsPage() {
+  const {
+    actionLoading, claimLoading, claimProducts, claimParts, claimOperations, recentClaimOperations, error,
+    searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, clearError,
+  } = useWorkReportStore();
+  const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
+  const navigate = useNavigate();
+  useEffect(() => { void loadRecentClaimableOperations(); }, [loadRecentClaimableOperations]);
+  return <div className="standard-page claim-page">
+    <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
+    {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
+    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={() => navigate("/work/operations")} />
+  </div>;
 }
 
-function OperationCard({ item, removing, onRemove }: { item: OperationAssignment; removing: boolean; onRemove: () => void }) {
-  return <article className="operation-card"><div><StatusPill status={item.status} /><span className="order-number">{item.orderNo}</span></div><h2>{item.operationName}</h2><p>{item.productName} · {item.productCode}</p><p>{item.partName || item.partCode} · {item.partCode}</p><div className="assignment-source"><span>{item.source === "self_claimed" ? "自主领取" : item.source === "leader_imported" ? "小组长导入" : "后台分配"}</span>{item.assignedBy && <small>{item.assignedBy.name}</small>}</div><dl><div><dt>计划数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>计划工时</dt><dd>{item.estimatedHours ? `${item.estimatedHours} 小时` : "未填写"}</dd></div></dl>{canWorkerRemoveAssignment(item) ? <button className="remove-claim-button" disabled={removing} onClick={onRemove}><Trash2 />删除领取</button> : item.source === "self_claimed" && <p className="locked-claim">已开始的自领工序需由后台删除</p>}</article>;
+function OperationCard({ item, removing, onRemove, v1Status = false }: { item: OperationAssignment; removing: boolean; onRemove: () => void; v1Status?: boolean }) {
+  return <article className="operation-card"><div>{v1Status ? <span className="status-pill status-assigned"><span />已领取</span> : <StatusPill status={item.status} />}<span className="order-number">{item.orderNo}</span></div><h2>{item.operationName}</h2><p>{item.productName} · {item.productCode}</p><p>{item.partName || item.partCode} · {item.partCode}</p><div className="assignment-source"><span>{item.source === "self_claimed" ? "自主领取" : item.source === "leader_imported" ? "小组长导入" : "后台分配"}</span>{item.assignedBy && <small>{item.assignedBy.name}</small>}</div><dl><div><dt>计划数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>计划工时</dt><dd>{item.estimatedHours ? `${item.estimatedHours} 小时` : "未填写"}</dd></div></dl>{canWorkerRemoveAssignment(item) && <button className="remove-claim-button" disabled={removing} onClick={onRemove}><Trash2 />取消领取</button>}</article>;
 }
 
 function ClaimOperationsPanel({
@@ -214,22 +235,44 @@ function ClaimOperationsPanel({
   const [keyword, setKeyword] = useState("CP-JSJ-240623-07");
   const [selectedProduct, setSelectedProduct] = useState<ClaimableProduct | null>(null);
   const [selectedPart, setSelectedPart] = useState<ClaimablePart | null>(null);
+  const [view, setView] = useState<ClaimPanelView>("search");
   const [filter, setFilter] = useState<ClaimOperationFilter>("all");
-  const sourceOperations = selectedPart ? operations : recentOperations;
-  const filteredOperations = sourceOperations.filter((item) => filter === "all" ? true : item.status === filter);
-  const operationHeading = selectedPart ? "3 可领取工序" : "最近可以领取的工序";
+  const [recentDate, setRecentDate] = useState<ClaimRecentDateFilter>("today");
+  const [recentStatus, setRecentStatus] = useState<Exclude<ClaimOperationFilter, "claimed">>("available");
+  const filteredSearchOperations = operations.filter((item) => filter === "all" ? true : item.status === filter);
+  const filteredRecentOperations = recentOperations.filter((item) => {
+    const matchesDate = recentDate === "all" ? true : isSameLocalDay(item.plannedStart);
+    const matchesStatus = recentStatus === "all" ? true : item.status === "available";
+    return matchesDate && matchesStatus;
+  });
   const search = async () => {
     setSelectedProduct(null);
     setSelectedPart(null);
     await onSearch(keyword);
   };
-  const loadRecent = async () => {
-    setSelectedProduct(null);
-    setSelectedPart(null);
-    await onLoadRecent?.();
-  };
+  const loadRecent = async () => { await onLoadRecent?.(); };
+  const renderOperation = (item: ClaimableOperation) => <article key={item.id} className={item.status !== "available" ? "disabled" : ""}><div><strong>{item.operationCode} · {item.operationName}</strong><span className={`claim-status-${item.status}`}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{item.productCode} · {item.partCode}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><button className="primary-button" disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</button></article>;
   if (claimed) return <section className="claim-success"><CheckCircle2 /><h2>{mode === "v1" ? "已领取工序" : "已加入工序清单"}</h2><p>{claimed.productCode} · {claimed.partCode}</p><strong>{claimed.operationName}</strong><div>{mode === "v1" ? <button className="primary-button" onClick={onViewClaimed}><ClipboardList />查看已领取</button> : <button className="primary-button" onClick={() => void onGoStart?.(claimed)}><Play />去开始</button>}<button className="ghost-button" onClick={onContinue}>继续领取</button></div></section>;
-  return <section className="claim-panel"><label className="claim-search"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入产品编号搜索" /><button disabled={loading || !keyword.trim()} onClick={() => void search()}>搜索</button></label><div className="claim-tools"><button className="ghost-button" disabled={loading} onClick={() => void loadRecent()}><RefreshCw />最近工序</button><div className="claim-filter" aria-label="领取状态筛选">{claimOperationFilterOptions.map(([key, label]) => <button key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}</div></div><p className="claim-help">可以搜索产品编号，也可以直接查看最近可领取的工序；已满工序会显示但不能领取。</p>{loading && <div className="claim-loading"><span className="spinner" />正在读取...</div>}<div className="claim-columns"><div><h2>1 产品编号</h2>{products.map((item) => <button key={item.id} className={selectedProduct?.id === item.id ? "selected" : ""} onClick={() => { setSelectedProduct(item); setSelectedPart(null); void onLoadParts(item.id); }}><strong>{item.productCode}</strong><span>{item.productName}</span><small>{item.orderNo} · 剩余 {item.remainingQuantity} 件</small></button>)}</div><div><h2>2 部件编号</h2>{parts.map((item) => <button key={item.id} className={selectedPart?.id === item.id ? "selected" : ""} onClick={() => { setSelectedPart(item); void onLoadOperations(item.id); }}><strong>{item.partCode}</strong><span>{item.partName}</span><small>{item.operationCount} 道工序 · 剩余 {item.remainingQuantity} 件</small></button>)}</div></div><div className="claim-operation-list"><h2>{operationHeading}</h2>{filteredOperations.map((item) => <article key={item.id} className={item.status !== "available" ? "disabled" : ""}><div><strong>{item.operationCode} · {item.operationName}</strong><span className={`claim-status-${item.status}`}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{item.productCode} · {item.partCode}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><button className="primary-button" disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</button></article>)}{!filteredOperations.length && <div className="empty-inline">{selectedPart ? "当前筛选下暂无工序" : "暂无最近工序，可搜索产品编号查看。"}</div>}</div></section>;
+  return <section className="claim-panel">
+    <div className="claim-view-tabs" aria-label="领取工序视图切换"><button className={view === "search" ? "active" : ""} onClick={() => setView("search")}>搜索领取</button><button className={view === "recent" ? "active" : ""} onClick={() => setView("recent")}>查看最近</button></div>
+    {loading && <div className="claim-loading"><span className="spinner" />正在读取...</div>}
+    {view === "search" && <section className="claim-workspace claim-search-workspace" aria-label="搜索结果">
+      <div className="section-heading"><div><h2>搜索结果</h2><p>按产品、部件、工序逐级选择。</p></div></div>
+      <label className="claim-search"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入产品编号搜索" /><button disabled={loading || !keyword.trim()} onClick={() => void search()}>搜索</button></label>
+      <div className="claim-filter" aria-label="领取状态筛选">{claimOperationFilterOptions.map(([key, label]) => <button key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}</div>
+      <div className="claim-columns">
+        <div><h3>1 产品编号</h3>{products.map((item) => <button key={item.id} className={selectedProduct?.id === item.id ? "selected" : ""} onClick={() => { setSelectedProduct(item); setSelectedPart(null); void onLoadParts(item.id); }}><strong>{item.productCode}</strong><span>{item.productName}</span><small>{item.orderNo} · 剩余 {item.remainingQuantity} 件</small></button>)}</div>
+        <div><h3>2 部件编号</h3>{parts.map((item) => <button key={item.id} className={selectedPart?.id === item.id ? "selected" : ""} onClick={() => { setSelectedPart(item); void onLoadOperations(item.id); }}><strong>{item.partCode}</strong><span>{item.partName}</span><small>{item.operationCount} 道工序 · 剩余 {item.remainingQuantity} 件</small></button>)}</div>
+      </div>
+      <div className="claim-operation-list" aria-label="搜索工序结果"><h3>3 工序</h3>{selectedPart ? filteredSearchOperations.map(renderOperation) : <div className="empty-inline">请先搜索并选择部件查看工序。</div>}{selectedPart && !filteredSearchOperations.length && <div className="empty-inline">当前筛选下暂无工序</div>}</div>
+    </section>}
+    {view === "recent" && <section className="claim-workspace claim-recent-workspace" aria-label="最近可以领取的工序">
+      <div className="section-heading"><div><h2>最近可以领取的工序</h2><p>不影响上方搜索结果。</p></div><button className="ghost-button" disabled={loading} onClick={() => void loadRecent()}><RefreshCw />刷新</button></div>
+      <div className="claim-filter-row"><div className="claim-filter compact-filter" aria-label="最近工序日期筛选">{([["today", "当日"], ["all", "全部"]] as const).map(([key, label]) => <button key={key} className={recentDate === key ? "active" : ""} onClick={() => setRecentDate(key)}>{label}</button>)}</div><div className="claim-filter compact-filter" aria-label="最近工序状态筛选">{claimRecentStatusOptions.map(([key, label]) => <button key={key} className={recentStatus === key ? "active" : ""} onClick={() => setRecentStatus(key)}>{label}</button>)}</div></div>
+      <div className="recent-operation-list">{filteredRecentOperations.map(renderOperation)}</div>
+      {!filteredRecentOperations.length && <div className="empty-inline">暂无最近工序，可点击刷新或搜索产品编号查看。</div>}
+    </section>}
+  </section>;
 }
 
 export function StatsPage() {
@@ -238,8 +281,8 @@ export function StatsPage() {
   useEffect(() => { void loadStatistics(period); }, [loadStatistics, period]);
   const maxTrendHours = Math.max(10, ...(statistics?.trend.map((item) => item.hours) || []));
   const trendTitle = period === "month" ? "每周工时" : "每日工时";
-  const trendSubtitle = period === "month" ? "最近2个月" : "本周";
-  return <div className="standard-page"><PageHeader title="我的统计" subtitle="工时、出勤与加班一目了然" /><div className="segmented">{([['day','今日'],['week','本周'],['month','本月']] as const).map(([key,label]) => <button key={key} className={period===key?'active':''} onClick={()=>setPeriod(key)}>{label}</button>)}</div>{statisticsLoading || !statistics ? <LoadingState /> : <><section className="stat-hero"><span>累计工时</span><strong>{statistics.totalHours.toFixed(1)}</strong><em>小时</em></section><div className="metric-grid"><Metric icon={Clock3} label="正常工时" value={`${statistics.regularHours.toFixed(1)} 小时`} /><Metric icon={CalendarClock} label="加班工时" value={`${statistics.overtimeHours.toFixed(1)} 小时`} tone="warning" /><Metric icon={CheckCircle2} label="完成工序" value={`${statistics.completedOperations} 道`} /><Metric icon={CalendarClock} label="出勤天数" value={`${statistics.attendanceDays} 天`} /></div>{period === "day" ? <section className="today-stat-note"><Clock3 /><div><strong>今日统计只显示汇总</strong><p>每日工时图在“本周”中查看，本月按周汇总展示最近2个月。</p></div></section> : <section className="trend-list"><div className="trend-heading"><div><h2>{trendTitle}</h2><p>{trendSubtitle}</p></div><div className="trend-legend" aria-label="工时图例"><span><i className="regular" />正常</span><span><i className="overtime" />加班</span></div></div>{statistics.trend.map((item) => { const regular = Math.max(0, item.hours - item.overtime); return <div className="trend-row" key={item.label}><span>{item.label}</span><div className="stacked-hours" aria-label={`${item.label}正常工时 ${regular} 小时，加班 ${item.overtime} 小时`}><i className="regular-hours" style={{ width: `${Math.min(regular / maxTrendHours * 100, 100)}%` }} /><i className="overtime-hours" style={{ width: `${Math.min(item.overtime / maxTrendHours * 100, 100)}%` }} /></div><div className="trend-value"><strong>{item.hours}h</strong>{item.overtime > 0 && <small>加班 {item.overtime}h</small>}</div></div>})}</section>}</>}</div>;
+  const trendSubtitle = period === "month" ? "本月按周汇总" : "本周";
+  return <div className="standard-page"><PageHeader title="我的统计" subtitle="已领取工序按计划工时汇总" /><div className="segmented">{([['day','今日'],['week','本周'],['month','本月']] as const).map(([key,label]) => <button key={key} className={period===key?'active':''} onClick={()=>setPeriod(key)}>{label}</button>)}</div>{statisticsLoading || !statistics ? <LoadingState /> : <><section className="stat-hero"><span>累计工时</span><strong>{statistics.totalHours.toFixed(1)}</strong><em>小时</em></section><div className="metric-grid"><Metric icon={Clock3} label="计划工时" value={`${statistics.regularHours.toFixed(1)} 小时`} /><Metric icon={CalendarClock} label="加班工时" value={`${statistics.overtimeHours.toFixed(1)} 小时`} tone="warning" /><Metric icon={CheckCircle2} label="已领工序" value={`${statistics.completedOperations} 道`} /><Metric icon={CalendarClock} label="涉及天数" value={`${statistics.attendanceDays} 天`} /></div>{period === "day" ? <section className="today-stat-note"><Clock3 /><div><strong>今日统计只显示汇总</strong><p>当前 v1 口径为领取即计入计划工时，真实报工工时将在后续版本开放。</p></div></section> : <section className="trend-list"><div className="trend-heading"><div><h2>{trendTitle}</h2><p>{trendSubtitle}</p></div><div className="trend-legend" aria-label="工时图例"><span><i className="regular" />计划</span><span><i className="overtime" />加班</span></div></div>{statistics.trend.map((item) => { const regular = Math.max(0, item.hours - item.overtime); return <div className="trend-row" key={item.label}><span>{item.label}</span><div className="stacked-hours" aria-label={`${item.label}计划工时 ${regular} 小时，加班 ${item.overtime} 小时`}><i className="regular-hours" style={{ width: `${Math.min(regular / maxTrendHours * 100, 100)}%` }} /><i className="overtime-hours" style={{ width: `${Math.min(item.overtime / maxTrendHours * 100, 100)}%` }} /></div><div className="trend-value"><strong>{item.hours}h</strong>{item.overtime > 0 && <small>加班 {item.overtime}h</small>}</div></div>})}</section>}</>}</div>;
 }
 
 function Metric({ icon: Icon, label, value, tone }: { icon: typeof Clock3; label: string; value: string; tone?: string }) { return <article className={`metric-card ${tone || ""}`}><Icon /><span>{label}</span><strong>{value}</strong></article>; }

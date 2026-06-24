@@ -1,8 +1,10 @@
-import { ClipboardList, UserRound } from "lucide-react";
+import { BarChart3, ClipboardList, ListChecks, UserRound } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 const navItems = [
   { to: "/work/claim", label: "领取工序", icon: ClipboardList },
+  { to: "/work/operations", label: "工序清单", icon: ListChecks },
+  { to: "/work/stats", label: "我的统计", icon: BarChart3 },
   { to: "/me", label: "我的", icon: UserRound },
 ];
 

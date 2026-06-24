@@ -19,6 +19,7 @@ export const realWorkReportRepository: WorkReportRepository = {
   async getAttendance() { return (await workReportClient.get("/attendance/me")).data; },
   async getDashboard() { return (await workReportClient.get("/admin/dashboard")).data; },
   async getOrders() { return (await workReportClient.get("/admin/orders")).data; },
+  async searchWorkers(keyword, page, pageSize) { return (await workReportClient.get("/admin/workers", { params: { keyword, page, pageSize } })).data; },
   async getReports() { return (await workReportClient.get("/admin/reports")).data; },
   async getExceptions() { return (await workReportClient.get("/admin/exceptions")).data; },
   async resolveException(id) { await workReportClient.post(`/admin/exceptions/${id}/resolve`); },

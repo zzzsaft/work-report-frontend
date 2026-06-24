@@ -102,6 +102,15 @@ export interface UserCapabilities {
   canViewAllTeams: boolean;
 }
 
+export interface WorkerSummary {
+  id: string;
+  employeeNo: string;
+  name: string;
+  nameInitials: string;
+  teamName: string;
+  activeAssignmentCount: number;
+}
+
 export interface ClaimableProduct {
   id: string;
   orderNo: string;
@@ -132,6 +141,7 @@ export interface ClaimableOperation {
   operationName: string;
   operationNote: string;
   plannedQuantity: number;
+  plannedStart?: string;
   estimatedHours: number;
   claimedWorkers: number;
   maxClaimWorkers?: number;

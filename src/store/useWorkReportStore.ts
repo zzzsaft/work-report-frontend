@@ -130,7 +130,7 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
         const partsByProduct = await Promise.all(products.slice(0, 6).map((product) => workReportRepository.getClaimableParts(product.id)));
         const parts = partsByProduct.flat();
         const operationsByPart = await Promise.all(parts.map((part) => workReportRepository.getClaimableOperations(part.id)));
-        set({ claimProducts: products, recentClaimOperations: operationsByPart.flat().slice(0, 12) });
+        set({ recentClaimOperations: operationsByPart.flat().slice(0, 12) });
       } catch (error) { set({ error: getErrorMessage(error) }); }
       finally { set({ claimLoading: false }); }
     },

@@ -5,18 +5,93 @@ import type {
   ClaimableProduct,
   DailyAttendance,
   LeaderImportDraft,
+  LaborStatistics,
   OperationAssignment,
   ProductionException,
   ReportRecord,
   WorkOrder,
+  WorkerSummary,
 } from "@/domain/work-report";
 import { canWorkerRemoveAssignment, getSessionElapsedSeconds, getSwitchableAssignmentsForDate } from "@/domain/work-report";
 
 const STORAGE_KEY = "work-report-mock-db-v3";
 const delay = (ms = 220) => new Promise((resolve) => setTimeout(resolve, ms));
 const nowIso = () => new Date().toISOString();
-const todayStart = (hour: number) => `2026-06-23T${String(hour).padStart(2, "0")}:00:00+08:00`;
-const todayEnd = (hour: number, minute = 0) => `2026-06-23T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+08:00`;
+const todayKey = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+const todayStart = (hour: number) => `${todayKey()}T${String(hour).padStart(2, "0")}:00:00+08:00`;
+const todayEnd = (hour: number, minute = 0) => `${todayKey()}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+08:00`;
+const roundHours = (value: number) => Math.round(value * 10) / 10;
+const dateKey = (date: Date | string) => {
+  const value = date instanceof Date ? date : new Date(date);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+};
+const assignmentStatDate = (assignment: OperationAssignment) => assignment.claimedAt || assignment.plannedStart;
+const assignmentStatHours = (assignment: OperationAssignment) => assignment.estimatedHours || 0;
+const weekStart = (date: Date) => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - day + 1);
+  return start;
+};
+const weekEnd = (date: Date) => {
+  const end = weekStart(date);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+};
+const isSameMonth = (left: Date, right: Date) => left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+const isInStatisticsPeriod = (assignment: OperationAssignment, period: LaborStatistics["period"], now = new Date()) => {
+  const time = new Date(assignmentStatDate(assignment));
+  if (Number.isNaN(time.getTime())) return false;
+  if (period === "day") return dateKey(time) === dateKey(now);
+  if (period === "week") return time >= weekStart(now) && time <= weekEnd(now);
+  return isSameMonth(time, now);
+};
+const weekLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+const buildClaimedStatistics = (assignments: OperationAssignment[], period: LaborStatistics["period"]): LaborStatistics => {
+  const now = new Date();
+  const counted = assignments.filter((assignment) => assignment.status !== "cancelled" && isInStatisticsPeriod(assignment, period, now));
+  const totalHours = roundHours(counted.reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
+  const attendanceDays = new Set(counted.map((assignment) => dateKey(assignmentStatDate(assignment)))).size;
+  const trend = period === "day" ? [] : period === "week"
+    ? weekLabels.map((label, index) => {
+      const day = new Date(weekStart(now));
+      day.setDate(day.getDate() + index);
+      const hours = roundHours(counted.filter((assignment) => dateKey(assignmentStatDate(assignment)) === dateKey(day)).reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
+      return { label, hours, overtime: 0 };
+    })
+    : Array.from({ length: Math.ceil(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() / 7) }, (_, index) => {
+      const start = index * 7 + 1;
+      const end = start + 6;
+      const hours = roundHours(counted.filter((assignment) => {
+        const day = new Date(assignmentStatDate(assignment)).getDate();
+        return day >= start && day <= end;
+      }).reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
+      return { label: `${now.getMonth() + 1}月第${index + 1}周`, hours, overtime: 0 };
+    });
+  return { period, totalHours, regularHours: totalHours, overtimeHours: 0, completedOperations: counted.length, attendanceDays, trend };
+};
+
+const mockWorkers: WorkerSummary[] = [
+  { id: "worker-001", employeeNo: "EMP-20240018", name: "张师傅", nameInitials: "zsf", teamName: "生产一组", activeAssignmentCount: 2 },
+  { id: "worker-002", employeeNo: "EMP-20240019", name: "王师傅", nameInitials: "wsf", teamName: "生产一组", activeAssignmentCount: 1 },
+  { id: "worker-003", employeeNo: "EMP-20240020", name: "李师傅", nameInitials: "lsf", teamName: "生产二组", activeAssignmentCount: 1 },
+  { id: "worker-004", employeeNo: "EMP-20240021", name: "赵师傅", nameInitials: "zsf", teamName: "生产二组", activeAssignmentCount: 0 },
+  { id: "worker-005", employeeNo: "EMP-20240022", name: "陈师傅", nameInitials: "csf", teamName: "生产三组", activeAssignmentCount: 3 },
+  { id: "worker-006", employeeNo: "EMP-20240023", name: "刘师傅", nameInitials: "lsf", teamName: "生产三组", activeAssignmentCount: 2 },
+  { id: "worker-007", employeeNo: "EMP-20240024", name: "周师傅", nameInitials: "zsf", teamName: "精加工组", activeAssignmentCount: 1 },
+  { id: "worker-008", employeeNo: "EMP-20240025", name: "吴师傅", nameInitials: "wsf", teamName: "精加工组", activeAssignmentCount: 0 },
+  { id: "worker-009", employeeNo: "EMP-20240026", name: "郑师傅", nameInitials: "zsf", teamName: "装配组", activeAssignmentCount: 2 },
+  { id: "worker-010", employeeNo: "EMP-20240027", name: "孙师傅", nameInitials: "ssf", teamName: "装配组", activeAssignmentCount: 1 },
+  { id: "worker-011", employeeNo: "EMP-20240028", name: "钱师傅", nameInitials: "qsf", teamName: "质检组", activeAssignmentCount: 0 },
+  { id: "worker-012", employeeNo: "EMP-20240029", name: "何师傅", nameInitials: "hsf", teamName: "质检组", activeAssignmentCount: 1 },
+  { id: "worker-013", employeeNo: "EMP-20240030", name: "郭师傅", nameInitials: "gsf", teamName: "生产一组", activeAssignmentCount: 0 },
+  { id: "worker-014", employeeNo: "EMP-20240031", name: "马师傅", nameInitials: "msf", teamName: "生产二组", activeAssignmentCount: 2 },
+];
 
 interface MockDb {
   assignments: OperationAssignment[];
@@ -77,10 +152,10 @@ const claimParts: ClaimablePart[] = [
 ];
 
 const claimOperations: ClaimableOperation[] = [
-  { id: "pool-op-001", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-060", operationName: "终检前倒角", operationNote: "重点检查窗口边、孔口倒角，完成后流转终检。", plannedQuantity: 40, estimatedHours: 2.5, claimedWorkers: 1, maxClaimWorkers: 2, status: "available" },
-  { id: "pool-op-002", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-070", operationName: "清洗包装", operationNote: "清洗后擦干，按周转箱标签摆放。", plannedQuantity: 40, estimatedHours: 1.5, claimedWorkers: 0, status: "available" },
-  { id: "pool-op-003", productId: "claim-product-001", partId: "part-002", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-COVER-002", partName: "端盖", operationCode: "OP-020", operationName: "端盖钻孔", operationNote: "孔位按图纸 A2 面基准，首件需复核。", plannedQuantity: 28, estimatedHours: 2, claimedWorkers: 0, status: "available" },
-  { id: "pool-op-004", productId: "claim-product-002", partId: "part-003", orderNo: "WO-20260623-021", productCode: "CP-FL-240623-02", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-030", operationName: "法兰攻丝", operationNote: "M10 丝孔，攻丝后吹净铁屑。", plannedQuantity: 52, estimatedHours: 3, claimedWorkers: 2, maxClaimWorkers: 2, status: "claimed" },
+  { id: "pool-op-001", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-060", operationName: "终检前倒角", operationNote: "重点检查窗口边、孔口倒角，完成后流转终检。", plannedQuantity: 40, plannedStart: todayStart(10), estimatedHours: 2.5, claimedWorkers: 1, maxClaimWorkers: 2, status: "available" },
+  { id: "pool-op-002", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-070", operationName: "清洗包装", operationNote: "清洗后擦干，按周转箱标签摆放。", plannedQuantity: 40, plannedStart: todayStart(15), estimatedHours: 1.5, claimedWorkers: 0, status: "available" },
+  { id: "pool-op-003", productId: "claim-product-001", partId: "part-002", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-COVER-002", partName: "端盖", operationCode: "OP-020", operationName: "端盖钻孔", operationNote: "孔位按图纸 A2 面基准，首件需复核。", plannedQuantity: 28, plannedStart: todayStart(13), estimatedHours: 2, claimedWorkers: 0, status: "available" },
+  { id: "pool-op-004", productId: "claim-product-002", partId: "part-003", orderNo: "WO-20260623-021", productCode: "CP-FL-240623-02", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-030", operationName: "法兰攻丝", operationNote: "M10 丝孔，攻丝后吹净铁屑。", plannedQuantity: 52, plannedStart: "2026-06-24T09:00:00+08:00", estimatedHours: 3, claimedWorkers: 2, maxClaimWorkers: 2, status: "claimed" },
 ];
 
 const completedAssignment = (id: string, daysAgo: number, operationCode: string, operationName: string, productCode: string, productName: string): OperationAssignment => {
@@ -191,7 +266,7 @@ const createAssignmentFromPool = (operation: ClaimableOperation, source: Operati
   operationName: operation.operationName,
   operationNote: operation.operationNote,
   plannedQuantity: operation.plannedQuantity,
-  plannedStart: todayStart(13),
+  plannedStart: operation.plannedStart || todayStart(13),
   plannedEnd: todayEnd(18),
   collaborators: [workerName],
   source,
@@ -286,25 +361,21 @@ export const mockWorkReportRepository: WorkReportRepository = {
   },
   async getStatistics(period) {
     await delay();
-    if (period === "day") {
-      return { period, totalHours: 8.6, regularHours: 8, overtimeHours: 0.6, completedOperations: 3, attendanceDays: 1, trend: [] };
-    }
-    if (period === "month") {
-      return {
-        period,
-        totalHours: 356.5,
-        regularHours: 336,
-        overtimeHours: 20.5,
-        completedOperations: 118,
-        attendanceDays: 42,
-        trend: ["5月第1周", "5月第2周", "5月第3周", "5月第4周", "6月第1周", "6月第2周", "6月第3周", "本周"].map((label, index) => ({ label, hours: [38, 42.5, 40, 45, 41, 43.5, 44, 42.5][index], overtime: [1, 2.5, 0, 4, 1.5, 3.5, 4.5, 3.5][index] })),
-      };
-    }
-    return { period, totalHours: 43, regularHours: 40, overtimeHours: 3, completedOperations: 15, attendanceDays: 5, trend: ["周一", "周二", "周三", "周四", "周五", "周六"].map((label, index) => ({ label, hours: [8, 8.5, 7.8, 9.2, 8.4, 4.2][index], overtime: [0, .5, 0, 1.2, .4, 0][index] })) };
+    return buildClaimedStatistics(load().assignments, period);
   },
   async getAttendance() { await delay(); return [0, 1, 2, 3, 4].map((offset): DailyAttendance => ({ date: `2026-06-${23 - offset}`, shift: "白班", regularHours: 8, overtimeHours: offset === 0 ? .6 : offset === 2 ? 1.2 : 0, attendanceStatus: "normal" })); },
   async getDashboard() { await delay(); const db = load(); return { activeOrders: db.orders.filter((x) => x.status === "in_progress").length, runningWorkers: 18, todayHours: 146.5, exceptionCount: db.exceptions.filter((x) => x.status === "open").length }; },
   async getOrders() { await delay(); return load().orders; },
+  async searchWorkers(keyword, page, pageSize) {
+    await delay();
+    const key = keyword.trim().toLowerCase();
+    const filtered = key
+      ? mockWorkers.filter((item) => `${item.employeeNo}${item.name}${item.nameInitials}${item.teamName}`.toLowerCase().includes(key))
+      : mockWorkers;
+    const start = Math.max(0, (page - 1) * pageSize);
+    const items = filtered.slice(start, start + pageSize);
+    return { items, hasMore: start + pageSize < filtered.length };
+  },
   async getReports() { await delay(); return load().reports; },
   async getExceptions() { await delay(); return load().exceptions; },
   async resolveException(id) { await delay(); const db = load(); db.exceptions = db.exceptions.map((item) => item.id === id ? { ...item, status: "resolved" } : item); save(db); },
@@ -328,7 +399,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
       const part = db.claimParts.find((item) => item.productId === product.id && item.partCode === row.partCode) || { id: `part-import-${Date.now()}-${index}`, productId: product.id, partCode: row.partCode, partName: row.partCode, operationCount: 0, remainingQuantity: row.quantity };
       if (!db.claimParts.some((item) => item.id === part.id)) db.claimParts.push(part);
       part.operationCount += 1;
-      db.claimOperations.push({ id: `pool-op-import-${Date.now()}-${index}`, productId: product.id, partId: part.id, orderNo: product.orderNo, productCode: product.productCode, productName: product.productName, partCode: part.partCode, partName: part.partName, operationCode: row.operationCode, operationName: row.operationName, operationNote: "小组长导入工序，请按现场工艺要求执行。", plannedQuantity: row.quantity, estimatedHours: row.estimatedHours, claimedWorkers: 0, status: "available" });
+      db.claimOperations.push({ id: `pool-op-import-${Date.now()}-${index}`, productId: product.id, partId: part.id, orderNo: product.orderNo, productCode: product.productCode, productName: product.productName, partCode: part.partCode, partName: part.partName, operationCode: row.operationCode, operationName: row.operationName, operationNote: "小组长导入工序，请按现场工艺要求执行。", plannedQuantity: row.quantity, plannedStart: todayStart(9), estimatedHours: row.estimatedHours, claimedWorkers: 0, status: "available" });
     });
     save(db);
     return { accepted: rows.length, rejected: 0, errors: [] };
@@ -338,7 +409,22 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const db = load();
     const operation = db.claimOperations.find((item) => item.id === input.operationId);
     if (!operation) throw new Error("未找到可分配工序");
+    if (operation.status !== "available") throw new Error("该工序当前不可分配");
+    if (operation.maxClaimWorkers && operation.claimedWorkers >= operation.maxClaimWorkers) throw new Error("该工序分配人数已满");
+    const duplicate = db.assignments.some((item) =>
+      item.status !== "cancelled" &&
+      item.productCode === operation.productCode &&
+      item.partCode === operation.partCode &&
+      item.operationCode === operation.operationCode &&
+      item.collaborators.includes(input.workerName),
+    );
+    if (duplicate) throw new Error("该人员已经分配了这道工序");
     db.assignments.unshift(createAssignmentFromPool(operation, "assigned", input.workerName));
+    db.claimOperations = db.claimOperations.map((item) => {
+      if (item.id !== input.operationId) return item;
+      const claimedWorkers = item.claimedWorkers + 1;
+      return { ...item, claimedWorkers, status: item.maxClaimWorkers && claimedWorkers >= item.maxClaimWorkers ? "claimed" : item.status };
+    });
     save(db);
   },
   async adminRemoveAssignment(assignmentId, reason) {

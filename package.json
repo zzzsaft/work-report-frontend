@@ -11,6 +11,9 @@
     "deploy:mac": "bash scripts/deploy.sh",
     "deploy:win": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
     "test": "vitest run src",
+    "test:api:v1": "node scripts/test-work-report-v1-api.mjs",
+    "test:stats:claimed": "node scripts/test-claimed-statistics.mjs",
+    "test:stats:seed": "node scripts/seed-work-report-statistics.mjs",
     "test:e2e": "playwright test",
     "preview": "vite preview"
   },

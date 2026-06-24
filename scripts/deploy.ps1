@@ -3,7 +3,7 @@ param(
   # powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1 -NasHost "hz.jc-times.com" -NasUser "zzzsaft"
   [string]$NasHost = "hz.jc-times.com",
   [int]$SshPort = 24,
-  [string]$NasUser = "zzzsaft",
+  [string]$NasUser = "jc",
   [string]$RemoteAppDir = "/volume1/docker/xftech",
   [string]$BuildCommand = "npm run build",
   [string]$ContainerName = "",
