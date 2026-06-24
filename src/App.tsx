@@ -18,6 +18,7 @@ const LeaderImportPage = lazy(() => adminPages.then((m) => ({ default: m.LeaderI
 const AssignmentAdminPage = lazy(() => adminPages.then((m) => ({ default: m.AssignmentAdminPage })));
 const ReportsPage = lazy(() => adminPages.then((m) => ({ default: m.ReportsPage })));
 const PeoplePage = lazy(() => adminPages.then((m) => ({ default: m.PeoplePage })));
+const PermissionsPage = lazy(() => adminPages.then((m) => ({ default: m.PermissionsPage })));
 const ExceptionsPage = lazy(() => adminPages.then((m) => ({ default: m.ExceptionsPage })));
 const SettingsPage = lazy(() => adminPages.then((m) => ({ default: m.SettingsPage })));
 const requireAuth = import.meta.env.VITE_REQUIRE_AUTH !== "false";
@@ -25,7 +26,7 @@ const requireAuth = import.meta.env.VITE_REQUIRE_AUTH !== "false";
 function ProtectedApp() {
   const routes = <Suspense fallback={<div className="page-state"><span className="spinner" /><p>正在加载页面...</p></div>}><Routes>
     <Route element={<MobileLayout />}><Route path="/work/claim" element={<ClaimOperationsPage />} /><Route path="/work/current" element={<Navigate to="/work/claim" replace />} /><Route path="/work/operations" element={<OperationsPage />} /><Route path="/work/stats" element={<StatsPage />} /><Route path="/me" element={<ProfilePage />} /></Route>
-    <Route path="/admin" element={<CapabilityGuard><AdminLayout /></CapabilityGuard>}><Route index element={<Navigate to="dashboard" replace />} /><Route path="dashboard" element={<DashboardPage />} /><Route path="orders" element={<OrdersPage />} /><Route path="import" element={<LeaderImportPage />} /><Route path="assignments" element={<AssignmentAdminPage />} /><Route path="reports" element={<ReportsPage />} /><Route path="people" element={<PeoplePage />} /><Route path="exceptions" element={<ExceptionsPage />} /><Route path="settings" element={<SettingsPage />} /></Route>
+    <Route path="/admin" element={<CapabilityGuard><AdminLayout /></CapabilityGuard>}><Route index element={<Navigate to="dashboard" replace />} /><Route path="dashboard" element={<DashboardPage />} /><Route path="orders" element={<OrdersPage />} /><Route path="import" element={<LeaderImportPage />} /><Route path="assignments" element={<AssignmentAdminPage />} /><Route path="reports" element={<ReportsPage />} /><Route path="people" element={<PeoplePage />} /><Route path="permissions" element={<PermissionsPage />} /><Route path="exceptions" element={<ExceptionsPage />} /><Route path="settings" element={<SettingsPage />} /></Route>
     <Route path="*" element={<Navigate to="/work/claim" replace />} />
   </Routes></Suspense>;
   return requireAuth ? <AuthGuard>{routes}</AuthGuard> : routes;

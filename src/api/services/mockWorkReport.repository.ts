@@ -7,9 +7,11 @@ import type {
   LeaderImportDraft,
   LaborStatistics,
   OperationAssignment,
+  PermissionGroup,
   ProductionException,
   ReportRecord,
   WorkOrder,
+  WorkerPermission,
   WorkerSummary,
 } from "@/domain/work-report";
 import { canWorkerRemoveAssignment, getSessionElapsedSeconds, getSwitchableAssignmentsForDate } from "@/domain/work-report";
@@ -99,6 +101,7 @@ interface MockDb {
   claimProducts: ClaimableProduct[];
   claimParts: ClaimablePart[];
   claimOperations: ClaimableOperation[];
+  workerPermissions: WorkerPermission[];
   reports: ReportRecord[];
   exceptions: ProductionException[];
 }
@@ -215,6 +218,10 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
   claimProducts,
   claimParts,
   claimOperations,
+  workerPermissions: mockWorkers.map((worker, index) => ({
+    ...worker,
+    permissionGroup: index === 0 ? "admin" : index < 4 ? "leader" : "worker",
+  })),
   reports: [
     { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", startedAt: "2026-06-22T08:12:00+08:00", durationHours: 6.75, photos: [] },
     { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", operationName: "钻孔", operatorName: "王师傅", status: "running", startedAt: "2026-06-23T09:05:00+08:00", durationHours: 3.4, photos: [] },
@@ -229,7 +236,7 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
 const load = (): MockDb => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
+    if (stored) return normalizeDb(JSON.parse(stored));
     const legacy = localStorage.getItem("work-report-mock-db-v2");
     if (legacy) localStorage.removeItem("work-report-mock-db-v2");
     const db = initialDb();
@@ -240,6 +247,13 @@ const load = (): MockDb => {
   }
 };
 const save = (db: MockDb) => localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+const normalizeDb = (db: MockDb): MockDb => ({
+  ...db,
+  workerPermissions: db.workerPermissions || mockWorkers.map((worker) => ({
+    ...worker,
+    permissionGroup: worker.id === "worker-001" ? "admin" : "worker",
+  })),
+});
 const findAssignment = (db: MockDb, id: string) => {
   const assignment = db.assignments.find((item) => item.id === id);
   if (!assignment) throw new Error("未找到工序");
@@ -375,6 +389,20 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const start = Math.max(0, (page - 1) * pageSize);
     const items = filtered.slice(start, start + pageSize);
     return { items, hasMore: start + pageSize < filtered.length };
+  },
+  async getWorkerPermissions() {
+    await delay();
+    return load().workerPermissions;
+  },
+  async updateWorkerPermission(workerId: string, permissionGroup: PermissionGroup) {
+    await delay();
+    const db = load();
+    const existing = db.workerPermissions.find((item) => item.id === workerId);
+    if (!existing) throw new Error("未找到人员");
+    const updated = { ...existing, permissionGroup };
+    db.workerPermissions = db.workerPermissions.map((item) => item.id === workerId ? updated : item);
+    save(db);
+    return updated;
   },
   async getReports() { await delay(); return load().reports; },
   async getExceptions() { await delay(); return load().exceptions; },

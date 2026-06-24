@@ -205,7 +205,7 @@ export function ClaimOperationsPage() {
   return <div className="standard-page claim-page">
     <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
-    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={() => navigate("/work/operations")} />
+    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
   </div>;
 }
 
@@ -232,7 +232,7 @@ function ClaimOperationsPanel({
   onContinue: () => void;
   onViewClaimed?: () => void;
 }) {
-  const [keyword, setKeyword] = useState("CP-JSJ-240623-07");
+  const [keyword, setKeyword] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ClaimableProduct | null>(null);
   const [selectedPart, setSelectedPart] = useState<ClaimablePart | null>(null);
   const [view, setView] = useState<ClaimPanelView>("search");

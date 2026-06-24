@@ -6,6 +6,7 @@ import {
   Gauge,
   Menu,
   Settings,
+  ShieldCheck,
   Upload,
   UserPlus,
   UsersRound,
@@ -22,6 +23,7 @@ const items = [
   ["/admin/assignments", "人员分配", UserPlus],
   ["/admin/reports", "报工记录", FileClock],
   ["/admin/people", "人员统计", UsersRound],
+  ["/admin/permissions", "权限设置", ShieldCheck],
   ["/admin/exceptions", "异常审核", AlertTriangle],
   ["/admin/settings", "系统设置", Settings],
 ] as const;

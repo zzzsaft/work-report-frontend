@@ -20,6 +20,8 @@ export const realWorkReportRepository: WorkReportRepository = {
   async getDashboard() { return (await workReportClient.get("/admin/dashboard")).data; },
   async getOrders() { return (await workReportClient.get("/admin/orders")).data; },
   async searchWorkers(keyword, page, pageSize) { return (await workReportClient.get("/admin/workers", { params: { keyword, page, pageSize } })).data; },
+  async getWorkerPermissions() { return (await workReportClient.get("/admin/worker-permissions")).data; },
+  async updateWorkerPermission(workerId, permissionGroup) { return (await workReportClient.patch(`/admin/workers/${workerId}/permission`, { permissionGroup })).data; },
   async getReports() { return (await workReportClient.get("/admin/reports")).data; },
   async getExceptions() { return (await workReportClient.get("/admin/exceptions")).data; },
   async resolveException(id) { await workReportClient.post(`/admin/exceptions/${id}/resolve`); },

@@ -14,7 +14,7 @@ export default function MobileLayout() {
       <main className="mobile-main"><Outlet /></main>
       <nav className="mobile-nav" aria-label="主要导航">
         {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={({ isActive }) => isActive ? "active" : ""}>
+          <NavLink key={to} to={to} replace className={({ isActive }) => isActive ? "active" : ""}>
             <Icon aria-hidden="true" /><span>{label}</span>
           </NavLink>
         ))}

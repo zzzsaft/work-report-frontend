@@ -11,6 +11,8 @@ import type {
   ProductionException,
   ReportRecord,
   UserCapabilities,
+  PermissionGroup,
+  WorkerPermission,
   WorkerSummary,
   WorkOrder,
 } from "@/domain/work-report";
@@ -46,6 +48,8 @@ export interface WorkReportRepository {
   getDashboard(): Promise<DashboardSummary>;
   getOrders(): Promise<WorkOrder[]>;
   searchWorkers(keyword: string, page: number, pageSize: number): Promise<{ items: WorkerSummary[]; hasMore: boolean }>;
+  getWorkerPermissions(): Promise<WorkerPermission[]>;
+  updateWorkerPermission(workerId: string, permissionGroup: PermissionGroup): Promise<WorkerPermission>;
   getReports(): Promise<ReportRecord[]>;
   getExceptions(): Promise<ProductionException[]>;
   resolveException(id: string): Promise<void>;

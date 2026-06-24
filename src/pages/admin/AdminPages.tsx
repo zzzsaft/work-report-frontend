@@ -4,11 +4,11 @@ import { registerAllModules } from "handsontable/registry";
 import type Handsontable from "handsontable/base";
 import "handsontable/styles/handsontable.min.css";
 import "handsontable/styles/ht-theme-main.min.css";
-import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Factory, RefreshCw, Search, Timer, Trash2, Upload, UserPlus, UsersRound, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Factory, RefreshCw, Search, ShieldCheck, Timer, Trash2, Upload, UserPlus, UsersRound, Wrench } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { workReportRepository } from "@/api/services/workReport.service";
 import { isMockMode } from "@/api/services/workReport.service";
-import { canWorkerRemoveAssignment, statusLabel, type ClaimableOperation, type ClaimablePart, type LeaderImportDraft, type DashboardSummary, type LaborStatistics, type OperationAssignment, type ProductionException, type ReportRecord, type WorkerSummary, type WorkOrder } from "@/domain/work-report";
+import { canWorkerRemoveAssignment, statusLabel, type ClaimableOperation, type ClaimablePart, type LeaderImportDraft, type DashboardSummary, type LaborStatistics, type OperationAssignment, type PermissionGroup, type ProductionException, type ReportRecord, type WorkerPermission, type WorkerSummary, type WorkOrder } from "@/domain/work-report";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { getErrorMessage } from "@/utils/errors";
 
@@ -30,6 +30,11 @@ const importColumns = [
 type ImportColumnKey = (typeof importColumns)[number]["key"];
 type LeaderImportGridRow = Record<ImportColumnKey, string>;
 type ImportCellError = { row: number; column: ImportColumnKey; message: string };
+const permissionOptions: Array<{ value: PermissionGroup; label: string; description: string }> = [
+  { value: "worker", label: "普通员工", description: "移动端领取、报工和查看个人统计" },
+  { value: "leader", label: "小组长", description: "可导入工序并查看小组任务" },
+  { value: "admin", label: "管理员", description: "可进入后台并管理分配、异常和权限" },
+];
 const createEmptyImportRow = (): LeaderImportGridRow => ({ productCode: "", partCode: "", operationCode: "", operationName: "", quantity: "", estimatedHours: "" });
 const createImportRows = () => [
   { productCode: "CP-JSJ-240623-07", partCode: "PART-CASE-001", operationCode: "OP-080", operationName: "终检复核", quantity: "40", estimatedHours: "1.5" },
@@ -242,7 +247,7 @@ export function LeaderImportPage() {
 }
 
 export function AssignmentAdminPage() {
-  const [keyword, setKeyword] = useState("CP-JSJ-240623-07");
+  const [keyword, setKeyword] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [selectedPart, setSelectedPart] = useState("");
   const [operations, setOperations] = useState<ClaimableOperation[]>([]);
@@ -292,6 +297,39 @@ export function ReportsPage() {
 export function PeoplePage() {
   const people = [{ name: "张师傅", group: "生产一组", hours: 8.6, overtime: .6, operations: 3 }, { name: "王师傅", group: "生产一组", hours: 8.2, overtime: .2, operations: 4 }, { name: "李师傅", group: "生产二组", hours: 7.8, overtime: 0, operations: 3 }, { name: "赵师傅", group: "生产二组", hours: 9.1, overtime: 1.1, operations: 5 }];
   return <><AdminHeader title="人员统计" description="查看每日工时、出勤与加班情况" /><section className="admin-panel"><div className="table-wrap"><table><thead><tr><th>生产人员</th><th>班组</th><th>今日工时</th><th>加班</th><th>完成工序</th><th>出勤状态</th></tr></thead><tbody>{people.map((item) => <tr key={item.name}><td><div className="person-cell"><span>{item.name.slice(0,1)}</span><strong>{item.name}</strong></div></td><td>{item.group}</td><td>{item.hours} 小时</td><td>{item.overtime} 小时</td><td>{item.operations} 道</td><td><span className="attendance-normal"><CheckCircle2 />正常</span></td></tr>)}</tbody></table></div></section></>;
+}
+
+export function PermissionsPage() {
+  const [search, setSearch] = useState("");
+  const [savingId, setSavingId] = useState("");
+  const [message, setMessage] = useState("");
+  const load = useCallback(() => workReportRepository.getWorkerPermissions(), []);
+  const { data: people = [], loading, error, reload } = useAsyncResource<WorkerPermission[]>(load);
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return people;
+    return people.filter((item) => `${item.employeeNo}${item.name}${item.nameInitials}${item.teamName}`.toLowerCase().includes(keyword));
+  }, [people, search]);
+  const counts = useMemo(() => permissionOptions.map((option) => ({
+    ...option,
+    count: people.filter((item) => item.permissionGroup === option.value).length,
+  })), [people]);
+  const updatePermission = async (person: WorkerPermission, permissionGroup: PermissionGroup) => {
+    if (person.permissionGroup === permissionGroup) return;
+    setSavingId(person.id);
+    setMessage("");
+    try {
+      const option = permissionOptions.find((item) => item.value === permissionGroup);
+      await workReportRepository.updateWorkerPermission(person.id, permissionGroup);
+      setMessage(`已将 ${person.name} 设置为${option?.label ?? permissionGroup}`);
+      await reload();
+    } catch (err) {
+      setMessage(getErrorMessage(err));
+    } finally {
+      setSavingId("");
+    }
+  };
+  return <><AdminHeader title="权限设置" description="罗列所有人员，并为每个人选择权限组" action={<SearchBox value={search} onChange={setSearch} placeholder="搜索姓名、工号、班组或首字母" />} />{message && <div className="admin-message">{message}</div>}<div className="permission-summary-grid">{counts.map((item) => <article key={item.value} className="admin-panel permission-summary-card"><div className="settings-icon"><ShieldCheck /></div><div><strong>{item.count}</strong><span>{item.label}</span></div><p>{item.description}</p></article>)}</div><section className="admin-panel permission-panel">{loading ? <LoadingTable /> : error ? <AdminError message={error} retry={() => void reload()} /> : <div className="table-wrap"><table><thead><tr><th>人员</th><th>工号</th><th>班组</th><th>当前任务</th><th>权限组</th></tr></thead><tbody>{filtered.map((person) => <tr key={person.id}><td><div className="person-cell"><span>{person.name.slice(0,1)}</span><strong>{person.name}</strong></div></td><td>{person.employeeNo}</td><td>{person.teamName}</td><td>{person.activeAssignmentCount} 道</td><td><div className="permission-select-cell">{permissionOptions.map((option) => <button key={option.value} className={person.permissionGroup === option.value ? "selected" : ""} disabled={savingId === person.id} onClick={() => void updatePermission(person, option.value)}>{savingId === person.id && person.permissionGroup !== option.value ? <span className="spinner small" /> : option.label}</button>)}</div></td></tr>)}{!filtered.length && <tr><td colSpan={5}>没有匹配的人员。</td></tr>}</tbody></table></div>}</section></>;
 }
 
 export function ExceptionsPage() {

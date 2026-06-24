@@ -102,6 +102,8 @@ export interface UserCapabilities {
   canViewAllTeams: boolean;
 }
 
+export type PermissionGroup = "worker" | "leader" | "admin";
+
 export interface WorkerSummary {
   id: string;
   employeeNo: string;
@@ -109,6 +111,10 @@ export interface WorkerSummary {
   nameInitials: string;
   teamName: string;
   activeAssignmentCount: number;
+}
+
+export interface WorkerPermission extends WorkerSummary {
+  permissionGroup: PermissionGroup;
 }
 
 export interface ClaimableProduct {

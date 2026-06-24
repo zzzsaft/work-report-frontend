@@ -107,6 +107,7 @@ test.describe("mobile claim operations", () => {
     await expect(page.getByText("法兰攻丝")).not.toBeVisible();
     await page.getByRole("button", { name: "搜索领取" }).click();
     await expect(page.getByLabel("搜索结果")).toBeVisible();
+    await page.getByPlaceholder("输入产品编号搜索").fill("CP-JSJ-240623-07");
     await page.getByRole("button", { name: "搜索", exact: true }).click();
     await page.getByRole("button", { name: /CP-JSJ-240623-07/ }).click();
     await page.getByRole("button", { name: /PART-COVER-002/ }).click();
@@ -182,6 +183,7 @@ test.describe("admin console", () => {
     await expect(page.getByText(/已导入/)).toBeVisible();
 
     await page.getByRole("link", { name: "人员分配" }).click();
+    await page.getByPlaceholder("搜索工单、产品或人员").fill("CP-JSJ-240623-07");
     await page.getByRole("button", { name: "搜索" }).click();
     await page.getByRole("button", { name: /CP-JSJ-240623-07/ }).first().click();
     await page.getByRole("button", { name: /PART-CASE-001/ }).first().click();
