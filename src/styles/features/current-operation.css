@@ -1,0 +1,67 @@
+/* Keep every critical work-order field visible above the fixed action dock. */
+.current-page .info-row { min-height: 68px; }
+
+.current-page .operation-row { min-height: 88px; }
+
+.day-completed { display: flex; min-height: calc(100dvh - 76px); align-items: center; flex-direction: column; padding: max(72px, calc(env(safe-area-inset-top) + 48px)) 28px 120px;
+  color: var(--ink);
+  background: linear-gradient(180deg, #f3fbf6 0, #fff 48%); text-align: center; }
+
+.completion-check { display: grid; width: 116px; height: 116px; place-items: center; border: 8px solid #d6f2e1; border-radius: 50%;
+  color: #fff;
+  background: var(--success); box-shadow: 0 16px 34px rgb(20 154 85 / 22%); }
+
+.completion-check svg { width: 68px; height: 68px; stroke-width: 2.6; }
+
+.day-completed h1 { margin: 30px 0 10px;
+  color: #0b5734; font-size: 29px; }
+
+.day-completed > p { max-width: 320px; margin: 0;
+  color: var(--muted); font-size: 18px; line-height: 1.7; }
+
+.completion-summary { display: flex; width: 100%; max-width: 360px; align-items: center; justify-content: space-between; margin: 36px 0 18px; border: 1px solid #cfe8d9; border-radius: 13px; padding: 17px 18px;
+  background: #fff; box-shadow: 0 8px 22px rgb(24 95 60 / 7%); }
+
+.completion-summary span { color: var(--muted); font-size: 16px; }
+
+.completion-summary strong { color: var(--success); font-size: 19px; }
+
+.day-completed .ghost-button { width: 100%; max-width: 360px; }
+
+.next-operation-list { display: grid; gap: 11px; padding-bottom: 6px; }
+
+.next-operation-list > button { position: relative; display: grid; width: 100%; min-height: 146px; gap: 5px; border: 1.5px solid #c7d8ee; border-radius: 13px; padding: 15px 46px 15px 16px;
+  color: var(--ink);
+  background: #fff; text-align: left; }
+
+.next-operation-list > button:active { border-color: var(--blue-700);
+  background: var(--blue-50); }
+
+.next-operation-list > button > div { display: flex; align-items: center; justify-content: space-between; }
+
+.next-operation-list > button span { color: var(--blue-700); font-size: 14px; font-weight: 800; }
+
+.next-operation-list > button em { color: var(--warning); font-size: 14px; font-style: normal; font-weight: 800; }
+
+.next-operation-list > button strong { color: var(--navy-900); font-size: 21px; }
+
+.next-operation-list > button p { margin: 0;
+  color: var(--muted); font-size: 15px; }
+
+.next-operation-list > button small { display: flex; align-items: center; gap: 5px;
+  color: #475467; font-size: 14px; }
+
+.next-operation-list > button small.operation-elapsed { color: var(--warning); font-weight: 800; }
+
+.next-operation-list > button small svg { width: 17px; }
+
+.next-operation-list > button > svg { position: absolute; top: 50%; right: 14px; width: 24px;
+  color: var(--blue-700); transform: translateY(-50%); }
+
+.no-current-page { padding-bottom: 110px; }
+
+.refresh-wide { width: 100%; margin-top: 14px; }
+
+.switch-action { border-color: #d79527;
+  color: var(--warning);
+  background: var(--warning-bg); }

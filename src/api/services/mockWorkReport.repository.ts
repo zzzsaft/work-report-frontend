@@ -13,10 +13,14 @@ import type {
   WorkOrder,
   WorkerPermission,
   WorkerSummary,
+  XftConfig,
+  XftHoursRow,
+  XftManualHoursDraft,
 } from "@/domain/work-report";
-import { canWorkerRemoveAssignment, getSessionElapsedSeconds, getSwitchableAssignmentsForDate } from "@/domain/work-report";
+import { canWorkerRemoveAssignment, getSessionElapsedSeconds, getSwitchableAssignmentsForDate, sortByNumericCode } from "@/domain/work-report";
 
 const STORAGE_KEY = "work-report-mock-db-v3";
+const XFT_CONFIG_KEY = "work-report-mock-xft-config-v1";
 const delay = (ms = 220) => new Promise((resolve) => setTimeout(resolve, ms));
 const nowIso = () => new Date().toISOString();
 const todayKey = () => {
@@ -46,6 +50,10 @@ const weekEnd = (date: Date) => {
   return end;
 };
 const isSameMonth = (left: Date, right: Date) => left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+const currentSalaryPeriod = () => {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+};
 const isInStatisticsPeriod = (assignment: OperationAssignment, period: LaborStatistics["period"], now = new Date()) => {
   const time = new Date(assignmentStatDate(assignment));
   if (Number.isNaN(time.getTime())) return false;
@@ -77,6 +85,71 @@ const buildClaimedStatistics = (assignments: OperationAssignment[], period: Labo
     });
   return { period, totalHours, regularHours: totalHours, overtimeHours: 0, completedOperations: counted.length, attendanceDays, trend };
 };
+
+const defaultXftConfig = (): XftConfig => ({
+  host: "https://api.cmbchina.com",
+  appid: "mock-appid",
+  enterpriseId: "mock-enterprise",
+  defaultUserId: "U0000",
+  defaultPlatformUserId: "AUTO0001",
+  dataCollectionName: "工时采集表",
+  importType: "ADD",
+  salaryPeriod: currentSalaryPeriod(),
+  workHoursFieldKey: "WORK_HOURS",
+  isCheckEmpty: false,
+  enabled: true,
+  hasAppSecret: true,
+});
+
+const loadXftConfig = () => {
+  try {
+    const stored = localStorage.getItem(XFT_CONFIG_KEY);
+    return stored ? { ...defaultXftConfig(), ...JSON.parse(stored), appSecret: undefined } : defaultXftConfig();
+  } catch {
+    return defaultXftConfig();
+  }
+};
+
+const persistXftConfig = (config: XftConfig) => {
+  const next = { ...config, hasAppSecret: !!config.appSecret || !!config.hasAppSecret };
+  localStorage.setItem(XFT_CONFIG_KEY, JSON.stringify({ ...next, appSecret: undefined }));
+  return { ...next, appSecret: undefined };
+};
+
+const previewMockXftHours = (): XftHoursRow[] => {
+  const grouped = new Map<string, XftHoursRow>();
+  load().assignments
+    .filter((assignment) => assignment.status !== "cancelled")
+    .forEach((assignment) => {
+      const staffNumber = assignment.assignedBy?.id || "EMP-20240018";
+      const existing = grouped.get(staffNumber);
+      if (existing) {
+        existing.hours = roundHours(existing.hours + (assignment.estimatedHours || 0));
+        return;
+      }
+      grouped.set(staffNumber, {
+        lineId: grouped.size + 1,
+        staffName: assignment.collaborators[0] || "张师傅",
+        staffNumber,
+        hours: roundHours(assignment.estimatedHours || 0),
+        identityNumber: "",
+        staffId: "",
+      });
+    });
+  return Array.from(grouped.values()).filter((row) => row.hours > 0);
+};
+
+const mockXftImportResult = (rows: XftHoursRow[]) => ({
+  accepted: rows.length,
+  rejected: 0,
+  items: rows.map((row) => ({
+    lineId: row.lineId,
+    staffName: row.staffName,
+    staffNumber: row.staffNumber,
+    hours: row.hours,
+  })),
+  errors: [],
+});
 
 const mockWorkers: WorkerSummary[] = [
   { id: "worker-001", employeeNo: "EMP-20240018", name: "张师傅", nameInitials: "zsf", teamName: "生产一组", activeAssignmentCount: 2 },
@@ -329,8 +402,8 @@ export const mockWorkReportRepository: WorkReportRepository = {
     if (!key) return load().claimProducts;
     return load().claimProducts.filter((item) => `${item.productCode}${item.productName}${item.orderNo}`.toLowerCase().includes(key));
   },
-  async getClaimableParts(productId) { await delay(); return load().claimParts.filter((item) => item.productId === productId).sort((a, b) => Number(a.partNo || 0) - Number(b.partNo || 0)); },
-  async getClaimableOperations(partId) { await delay(); return load().claimOperations.filter((item) => item.partId === partId).sort((a, b) => Number(a.operationNo || 0) - Number(b.operationNo || 0)); },
+  async getClaimableParts(productId) { await delay(); return sortByNumericCode(load().claimParts.filter((item) => item.productId === productId), (item) => item.partNo); },
+  async getClaimableOperations(partId) { await delay(); return sortByNumericCode(load().claimOperations.filter((item) => item.partId === partId), (item) => item.operationNo); },
   async claimOperation(operationId) {
     await delay();
     const db = load();
@@ -421,6 +494,33 @@ export const mockWorkReportRepository: WorkReportRepository = {
     });
     save(db);
     return { accepted: rows.length, rejected: 0, errors: [] };
+  },
+  async getXftConfig() {
+    await delay();
+    return loadXftConfig();
+  },
+  async saveXftConfig(config: XftConfig) {
+    await delay();
+    return persistXftConfig(config);
+  },
+  async previewXftHours() {
+    await delay();
+    return previewMockXftHours();
+  },
+  async importXftHours() {
+    await delay(360);
+    return mockXftImportResult(previewMockXftHours());
+  },
+  async importManualXftHours(rows: XftManualHoursDraft[]) {
+    await delay(360);
+    return mockXftImportResult(rows.map((row, index) => ({
+      lineId: index + 1,
+      staffName: row.staffName,
+      staffNumber: row.staffNumber,
+      hours: row.hours,
+      identityNumber: row.identityNumber || "",
+      staffId: row.staffId || "",
+    })));
   },
   async adminAssignOperation(input: AdminAssignOperationInput) {
     await delay();

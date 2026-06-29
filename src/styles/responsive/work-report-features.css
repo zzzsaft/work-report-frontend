@@ -1,0 +1,9 @@
+@media (max-width: 980px) { .assignment-admin-grid { grid-template-columns: 1fr; }
+
+.admin-inline-actions { width: 100%; align-items: stretch; flex-direction: column; } }
+
+@media (max-width: 760px) { .permission-summary-grid,.account-admin-grid { grid-template-columns: 1fr; }
+
+.permission-select-cell { min-width: 260px; }
+
+.reset-password-cell { min-width: 260px; } }

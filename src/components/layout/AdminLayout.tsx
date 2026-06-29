@@ -8,6 +8,7 @@ import {
   Settings,
   ShieldCheck,
   Upload,
+  UserCog,
   UserPlus,
   UsersRound,
   Wrench,
@@ -15,21 +16,26 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { canAccessAdminRoute, type AdminRouteKey } from "@/domain/work-report";
+import { useWorkReportStore } from "@/store/useWorkReportStore";
 
 const items = [
-  ["/admin/dashboard", "生产总览", Gauge],
-  ["/admin/orders", "工单与工序", ClipboardList],
-  ["/admin/import", "小组长导入", Upload],
-  ["/admin/assignments", "人员分配", UserPlus],
-  ["/admin/reports", "报工记录", FileClock],
-  ["/admin/people", "人员统计", UsersRound],
-  ["/admin/permissions", "权限设置", ShieldCheck],
-  ["/admin/exceptions", "异常审核", AlertTriangle],
-  ["/admin/settings", "系统设置", Settings],
+  ["/admin/dashboard", "dashboard", "生产总览", Gauge],
+  ["/admin/orders", "orders", "工单与工序", ClipboardList],
+  ["/admin/import", "import", "小组长导入", Upload],
+  ["/admin/assignments", "assignments", "人员分配", UserPlus],
+  ["/admin/reports", "reports", "报工记录", FileClock],
+  ["/admin/people", "people", "人员统计", UsersRound],
+  ["/admin/permissions", "permissions", "权限设置", ShieldCheck],
+  ["/admin/accounts", "accounts", "账号管理", UserCog],
+  ["/admin/exceptions", "exceptions", "异常审核", AlertTriangle],
+  ["/admin/settings", "settings", "系统设置", Settings],
 ] as const;
 
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
+  const capabilities = useWorkReportStore((state) => state.capabilities);
+  const visibleItems = items.filter(([, routeKey]) => canAccessAdminRoute(capabilities, routeKey as AdminRouteKey));
   return (
     <div className="admin-shell">
       <aside className={open ? "open" : ""}>
@@ -46,7 +52,7 @@ export default function AdminLayout() {
           </button>
         </header>
         <nav>
-          {items.map(([to, label, Icon]) => (
+          {visibleItems.map(([to, , label, Icon]) => (
             <NavLink key={to} to={to} onClick={() => setOpen(false)}>
               <Icon />
               {label}

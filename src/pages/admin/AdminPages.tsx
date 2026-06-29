@@ -4,12 +4,14 @@ import { registerAllModules } from "handsontable/registry";
 import type Handsontable from "handsontable/base";
 import "handsontable/styles/handsontable.min.css";
 import "handsontable/styles/ht-theme-main.min.css";
-import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Factory, RefreshCw, Search, ShieldCheck, Timer, Trash2, Upload, UserPlus, UsersRound, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Factory, KeyRound, Power, RefreshCw, Save, Search, ShieldCheck, Timer, Trash2, Upload, UserCog, UserPlus, UsersRound, Wrench } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AuthService, type AccountRole, type AdminAccount } from "@/api/services/auth.service";
 import { workReportRepository } from "@/api/services/workReport.service";
 import { isMockMode } from "@/api/services/workReport.service";
-import { canWorkerRemoveAssignment, statusLabel, type ClaimableOperation, type ClaimablePart, type LeaderImportDraft, type DashboardSummary, type LaborStatistics, type OperationAssignment, type PermissionGroup, type ProductionException, type ReportRecord, type WorkerPermission, type WorkerSummary, type WorkOrder } from "@/domain/work-report";
+import { canWorkerRemoveAssignment, statusLabel, type ClaimableOperation, type ClaimablePart, type LeaderImportDraft, type DashboardSummary, type LaborStatistics, type OperationAssignment, type PermissionGroup, type ProductionException, type ReportRecord, type WorkerPermission, type WorkerSummary, type WorkOrder, type XftConfig, type XftHoursRow, type XftManualHoursDraft } from "@/domain/work-report";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { getErrorMessage } from "@/utils/errors";
 
 registerAllModules();
@@ -87,6 +89,8 @@ export function DashboardPage() {
 function Kpi({ icon: Icon, label, value, unit, danger }: { icon: typeof Factory; label: string; value: string | number; unit: string; danger?: boolean }) { return <article className={`kpi-card ${danger ? "danger" : ""}`}><div><Icon /></div><span>{label}</span><p><strong>{value}</strong>{unit}</p></article>; }
 
 export function OrdersPage() {
+  const canAssignWorkers = useWorkReportStore((state) => !!state.capabilities?.canAssignWorkers);
+  const canViewTeamOperations = useWorkReportStore((state) => !!(state.capabilities?.canViewTeamOperations || state.capabilities?.canViewAllTeams));
   const [search, setSearch] = useState("");
   const [expandedOrderId, setExpandedOrderId] = useState("");
   const [selectedPartId, setSelectedPartId] = useState("");
@@ -99,6 +103,10 @@ export function OrdersPage() {
   const filtered = orders.filter((item) => `${item.orderNo}${item.productName}${item.productCode}`.toLowerCase().includes(search.toLowerCase()));
   const openOrder = async (order: WorkOrder) => {
     setMessage("");
+    if (!canViewTeamOperations) {
+      setMessage("当前账号没有团队工序视图权限。");
+      return;
+    }
     const nextOpen = expandedOrderId === order.id ? "" : order.id;
     setExpandedOrderId(nextOpen);
     setSelectedPartId("");
@@ -137,6 +145,10 @@ export function OrdersPage() {
     }
   };
   const assignOperation = async (operation: ClaimableOperation, worker: WorkerSummary) => {
+    if (!canAssignWorkers) {
+      setMessage("当前账号没有员工派工权限。");
+      return;
+    }
     setMessage("");
     await workReportRepository.adminAssignOperation({ operationId: operation.id, workerId: worker.id, workerName: worker.name });
     setMessage(`已将 ${operation.operationName} 分配给 ${worker.name}`);
@@ -149,15 +161,15 @@ export function OrdersPage() {
     const activePart = selectedPartId && orderParts.some((part) => part.id === selectedPartId) ? selectedPartId : orderParts[0]?.id || "";
     const activeOperations = activePart ? operations[activePart] || [] : [];
     const isOpen = expandedOrderId === item.id;
-    return <article className="order-management-card" key={item.id}><button className="order-summary-row" onClick={() => void openOrder(item)} aria-expanded={isOpen}><div><strong>{item.orderNo}</strong><span>{item.productName} · {item.productCode}</span></div><div className="progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span>{item.progress}%</div><AdminStatus status={item.status} /><ChevronDown className={isOpen ? "rotated" : ""} /></button>{isOpen && <div className="order-operation-panel">{panelLoading === item.id ? <LoadingTable /> : <><div className="part-tabs">{orderParts.map((part) => <button key={part.id} className={activePart === part.id ? "active" : ""} onClick={() => void choosePart(part.id)}><strong>{part.partCode}</strong><span>{part.partNo && `[${part.partNo}] `}{part.partName}</span></button>)}</div>{panelLoading === activePart ? <LoadingTable /> : activeOperations.length ? <div className="operation-assignment-list">{activeOperations.map((operation) => <OperationAssignRow key={operation.id} operation={operation} onAssign={assignOperation} />)}</div> : <div className="empty-inline">当前工单暂无可分配工序。</div>}</>}</div>}</article>;
+    return <article className="order-management-card" key={item.id}><button className="order-summary-row" onClick={() => void openOrder(item)} aria-expanded={isOpen}><div><strong>{item.orderNo}</strong><span>{item.productName} · {item.productCode}</span></div><div className="progress-cell"><span><i style={{ width: `${item.progress}%` }} /></span>{item.progress}%</div><AdminStatus status={item.status} />{canViewTeamOperations && <ChevronDown className={isOpen ? "rotated" : ""} />}</button>{isOpen && canViewTeamOperations && <div className="order-operation-panel">{panelLoading === item.id ? <LoadingTable /> : <><div className="part-tabs">{orderParts.map((part) => <button key={part.id} className={activePart === part.id ? "active" : ""} onClick={() => void choosePart(part.id)}><strong>{part.partCode}</strong><span>{part.partNo && `[${part.partNo}] `}{part.partName}</span></button>)}</div>{panelLoading === activePart ? <LoadingTable /> : activeOperations.length ? <div className="operation-assignment-list">{activeOperations.map((operation) => <OperationAssignRow key={operation.id} operation={operation} canAssign={canAssignWorkers} onAssign={assignOperation} />)}</div> : <div className="empty-inline">当前工单暂无可分配工序。</div>}</>}</div>}</article>;
   })}{!filtered.length && <div className="empty-inline">没有匹配的工单。</div>}</div>}</section></>;
 }
 
-function OperationAssignRow({ operation, onAssign }: { operation: ClaimableOperation; onAssign: (operation: ClaimableOperation, worker: WorkerSummary) => Promise<void> }) {
+function OperationAssignRow({ operation, canAssign, onAssign }: { operation: ClaimableOperation; canAssign: boolean; onAssign: (operation: ClaimableOperation, worker: WorkerSummary) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const full = operation.maxClaimWorkers ? operation.claimedWorkers >= operation.maxClaimWorkers : false;
-  const disabled = operation.status !== "available" || full;
-  return <article className="operation-assignment-row"><div><strong>{operation.operationCode} · {operation.operationNo && `[${operation.operationNo}] `}{operation.operationName}</strong><span>{operation.partName} · {operation.plannedQuantity} 件 · {operation.estimatedHours} 小时</span></div><div className="operation-capacity"><span>{operation.claimedWorkers}{operation.maxClaimWorkers ? `/${operation.maxClaimWorkers}` : ""} 人</span><AdminStatus status={operation.status} /></div><button className="admin-primary-action slim" disabled={disabled} onClick={() => setOpen((value) => !value)}><UserPlus />分配人员</button>{open && !disabled && <WorkerPicker operation={operation} onAssigned={async (worker) => { await onAssign(operation, worker); setOpen(false); }} />}</article>;
+  const disabled = !canAssign || operation.status !== "available" || full;
+  return <article className="operation-assignment-row"><div><strong>{operation.operationCode} · {operation.operationNo && `[${operation.operationNo}] `}{operation.operationName}</strong><span>{operation.partName} · {operation.plannedQuantity} 件 · {operation.estimatedHours} 小时</span></div><div className="operation-capacity"><span>{operation.claimedWorkers}{operation.maxClaimWorkers ? `/${operation.maxClaimWorkers}` : ""} 人</span><AdminStatus status={operation.status} /></div>{canAssign && <button className="admin-primary-action slim" disabled={disabled} onClick={() => setOpen((value) => !value)}><UserPlus />分配人员</button>}{open && !disabled && <WorkerPicker operation={operation} onAssigned={async (worker) => { await onAssign(operation, worker); setOpen(false); }} />}</article>;
 }
 
 function WorkerPicker({ operation, onAssigned }: { operation: ClaimableOperation; onAssigned: (worker: WorkerSummary) => Promise<void> }) {
@@ -207,10 +219,46 @@ function WorkerPicker({ operation, onAssigned }: { operation: ClaimableOperation
   return <div className="worker-picker"><div className="worker-picker-head"><label className="search-box compact"><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜姓名、工号、首字母" /></label><span>{operation.operationCode}</span></div><div className="worker-result-list">{workers.map((worker) => <button key={worker.id} disabled={!!assigningId} onClick={() => void assign(worker)}><span className="worker-avatar-mini">{worker.name.slice(0, 1)}</span><div><strong>{worker.name}</strong><small>{worker.employeeNo} · {worker.nameInitials.toUpperCase()} · {worker.teamName}</small></div><em>{worker.activeAssignmentCount} 道</em>{assigningId === worker.id ? <span className="spinner small" /> : <Check />}</button>)}{!workers.length && !loading && <div className="empty-inline">没有找到人员。</div>}<div ref={sentinelRef} className="lazy-load-state">{loading ? "正在加载人员..." : hasMore ? "继续下滑加载更多人员" : "人员已显示完"}</div></div>{error && <div className="admin-message danger">{error}</div>}</div>;
 }
 
+const currentSalaryPeriod = () => { const now = new Date(); return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`; };
+const defaultXftConfig = (): XftConfig => ({ host: "https://api.cmbchina.com", appid: "", appSecret: "", enterpriseId: "", defaultUserId: "U0000", defaultPlatformUserId: "AUTO0001", dataCollectionName: "", importType: "ADD", salaryPeriod: currentSalaryPeriod(), workHoursFieldKey: "", isCheckEmpty: false, enabled: true });
+const createManualXftRows = () => [{ staffName: "小灰16", staffNumber: "000002", hours: "8", identityNumber: "", staffId: "" }, ...Array.from({ length: 7 }, () => ({ staffName: "", staffNumber: "", hours: "", identityNumber: "", staffId: "" }))];
+type ManualXftGridRow = ReturnType<typeof createManualXftRows>[number];
+const hasManualXftValue = (row: ManualXftGridRow) => [row.staffName, row.staffNumber, row.hours, row.identityNumber, row.staffId].some((value) => value.trim());
+const getManualXftDraftRows = (rows: ManualXftGridRow[]): XftManualHoursDraft[] => rows.filter(hasManualXftValue).map((row) => ({ staffName: row.staffName.trim(), staffNumber: row.staffNumber.trim(), hours: Number(row.hours), identityNumber: row.identityNumber.trim(), staffId: row.staffId.trim() }));
+
+function XftConfigPanel({ onSaved }: { onSaved: (config: XftConfig) => void }) {
+  const [config, setConfig] = useState<XftConfig>(defaultXftConfig);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => { let active = true; workReportRepository.getXftConfig().then((data) => { if (!active) return; setConfig({ ...defaultXftConfig(), ...data, appSecret: "" }); onSaved(data); }).catch((error) => { if (active) setMessage(getErrorMessage(error)); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [onSaved]);
+  const update = (key: keyof XftConfig, value: string | boolean) => { setMessage(""); setConfig((current) => ({ ...current, [key]: value })); };
+  const save = async () => { setSaving(true); setMessage(""); try { const saved = await workReportRepository.saveXftConfig(config); setConfig({ ...saved, appSecret: "" }); onSaved(saved); setMessage("薪福通配置已保存"); } catch (error) { setMessage(getErrorMessage(error)); } finally { setSaving(false); } };
+  return <section className="admin-panel xft-panel"><div className="panel-heading"><div><h2>薪福通配置</h2><p>{loading ? "正在读取配置" : config.hasAppSecret ? "密钥已配置，留空不会覆盖" : "请填写薪福通必填配置"}</p></div><button className="admin-primary-action" disabled={saving || loading} onClick={() => void save()}><Save />保存配置</button></div>{message && <div className="admin-message">{message}</div>}<div className="xft-config-grid"><label className="admin-field">接口地址<input value={config.host} onChange={(event) => update("host", event.target.value)} /></label><label className="admin-field">应用 ID<input value={config.appid} onChange={(event) => update("appid", event.target.value)} /></label><label className="admin-field">应用密钥<input type="password" value={config.appSecret || ""} placeholder={config.hasAppSecret ? "已保存，留空不变" : "必填"} onChange={(event) => update("appSecret", event.target.value)} /></label><label className="admin-field">企业 ID<input value={config.enterpriseId} onChange={(event) => update("enterpriseId", event.target.value)} /></label><label className="admin-field">采集表名称<input value={config.dataCollectionName} onChange={(event) => update("dataCollectionName", event.target.value)} /></label><label className="admin-field">导入类型<input value={config.importType} onChange={(event) => update("importType", event.target.value)} /></label><label className="admin-field">薪资期间<input value={config.salaryPeriod} onChange={(event) => update("salaryPeriod", event.target.value)} /></label><label className="admin-field">工时字段<input value={config.workHoursFieldKey} onChange={(event) => update("workHoursFieldKey", event.target.value)} /></label><label className="admin-field">调用用户<input value={config.defaultUserId} onChange={(event) => update("defaultUserId", event.target.value)} /></label><label className="admin-field">平台用户<input value={config.defaultPlatformUserId} onChange={(event) => update("defaultPlatformUserId", event.target.value)} /></label></div><div className="xft-toggle-row"><label><input type="checkbox" checked={config.isCheckEmpty} onChange={(event) => update("isCheckEmpty", event.target.checked)} />校验空值</label><label><input type="checkbox" checked={config.enabled} onChange={(event) => update("enabled", event.target.checked)} />启用集成</label></div></section>;
+}
+
+function XftHoursImportPanel({ salaryPeriod }: { salaryPeriod: string }) {
+  const [period, setPeriod] = useState(salaryPeriod || currentSalaryPeriod());
+  const [preview, setPreview] = useState<XftHoursRow[]>([]);
+  const [manualRows, setManualRows] = useState<ManualXftGridRow[]>(createManualXftRows);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => { if (salaryPeriod) setPeriod(salaryPeriod); }, [salaryPeriod]);
+  const previewHours = async () => { setLoading(true); setMessage(""); try { const rows = await workReportRepository.previewXftHours(period); setPreview(rows); setMessage(rows.length ? `预览到 ${rows.length} 名员工工时` : "该期间暂无可导入工时"); } catch (error) { setMessage(getErrorMessage(error)); } finally { setLoading(false); } };
+  const importSummary = async () => { setLoading(true); setMessage(""); try { const result = await workReportRepository.importXftHours(period); setMessage(result.errors.length ? `薪福通返回错误：${result.errors.map((item) => `第${item.row}行 ${item.message}`).join("；")}` : `已推送 ${result.accepted} 名员工工时`); } catch (error) { setMessage(getErrorMessage(error)); } finally { setLoading(false); } };
+  const updateManualRows = (changes: Handsontable.CellChange[] | null, source: Handsontable.ChangeSource) => { if (!changes || source === "loadData") return; setMessage(""); setManualRows((currentRows) => { const nextRows = currentRows.map((row) => ({ ...row })); changes.forEach(([rowIndex, prop, , nextValue]) => { if (typeof prop !== "string" || !(prop in createManualXftRows()[0])) return; while (!nextRows[rowIndex]) nextRows.push({ staffName: "", staffNumber: "", hours: "", identityNumber: "", staffId: "" }); nextRows[rowIndex] = { ...nextRows[rowIndex], [prop]: String(nextValue ?? "") }; }); return nextRows; }); };
+  const manualDraftRows = useMemo(() => getManualXftDraftRows(manualRows), [manualRows]);
+  const manualErrors = useMemo(() => manualRows.flatMap((row, index) => { if (!hasManualXftValue(row)) return []; const errors: string[] = []; if (!row.staffName.trim()) errors.push("姓名必填"); if (!row.staffNumber.trim()) errors.push("工号必填"); const hours = Number(row.hours); if (!row.hours.trim() || !Number.isFinite(hours) || hours <= 0) errors.push("工时需大于0"); return errors.map((message) => ({ row: index + 1, message })); }), [manualRows]);
+  const importManual = async () => { setLoading(true); setMessage(""); try { const result = await workReportRepository.importManualXftHours(manualDraftRows, period); setMessage(result.errors.length ? `薪福通返回错误：${result.errors.map((item) => `第${item.row}行 ${item.message}`).join("；")}` : `已手工推送 ${result.accepted} 名员工工时`); } catch (error) { setMessage(getErrorMessage(error)); } finally { setLoading(false); } };
+  return <section className="admin-panel xft-panel"><div className="panel-heading"><div><h2>薪福通工时导入</h2><p>按期间汇总或手工填写员工工时后推送到采集表</p></div><label className="xft-period-input">薪资期间<input value={period} onChange={(event) => setPeriod(event.target.value)} /></label></div>{message && <div className="admin-message">{message}</div>}<div className="xft-import-grid"><section><div className="xft-section-head"><h3>按员工汇总</h3><div><button className="table-action" disabled={loading} onClick={() => void previewHours()}><RefreshCw />预览</button><button className="admin-primary-action" disabled={loading} onClick={() => void importSummary()}><Upload />推送</button></div></div><div className="table-wrap compact"><table><thead><tr><th>姓名</th><th>工号</th><th>工时</th></tr></thead><tbody>{preview.map((row) => <tr key={`${row.staffNumber}-${row.lineId}`}><td>{row.staffName}</td><td>{row.staffNumber}</td><td>{row.hours}</td></tr>)}{!preview.length && <tr><td colSpan={3}>尚未预览</td></tr>}</tbody></table></div></section><section><div className="xft-section-head"><h3>手工导入</h3><button className="admin-primary-action" disabled={loading || !manualDraftRows.length || manualErrors.length > 0} onClick={() => void importManual()}><Upload />推送手工表</button></div>{manualErrors.length > 0 && <div className="admin-message danger">{manualErrors.slice(0, 3).map((item) => `第${item.row}行 ${item.message}`).join("；")}</div>}<div className="leader-import-sheet ht-theme-main"><HotTable data={manualRows} columns={[{ data: "staffName", width: 110 }, { data: "staffNumber", width: 120 }, { data: "hours", width: 80 }, { data: "identityNumber", width: 150 }, { data: "staffId", width: 110 }]} colHeaders={["姓名", "工号", "工时", "证件号", "员工序号"]} rowHeaders={true} height={240} width="100%" stretchH="all" minSpareRows={3} afterChange={updateManualRows} licenseKey="non-commercial-and-evaluation" /></div></section></div></section>;
+}
+
 export function LeaderImportPage() {
+  const canImportOperations = useWorkReportStore((state) => !!state.capabilities?.canImportOperations);
   const [tableRows, setTableRows] = useState<LeaderImportGridRow[]>(createImportRows);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [xftConfig, setXftConfig] = useState<XftConfig>(defaultXftConfig);
   const rows = useMemo(() => getImportDraftRows(tableRows), [tableRows]);
   const errors = useMemo(() => validateImportGridRows(tableRows), [tableRows]);
   const errorByCell = useMemo(() => {
@@ -232,6 +280,10 @@ export function LeaderImportPage() {
     });
   };
   const submit = async () => {
+    if (!canImportOperations) {
+      setMessage("当前账号没有工序导入权限。");
+      return;
+    }
     setSubmitting(true);
     setMessage("");
     try {
@@ -243,17 +295,19 @@ export function LeaderImportPage() {
       setSubmitting(false);
     }
   };
-  return <><AdminHeader title="小组长工序导入" description="直接从 Excel 粘贴或在单元格内编辑，格式错误会标红" action={<button className="admin-primary-action" disabled={submitting || !rows.length || errors.length > 0} onClick={() => void submit()}><Upload />确认导入</button>} /><section className="admin-panel import-panel"><div className="import-summary"><span>已填写 {rows.length} 行</span>{errors.length > 0 ? <strong className="danger-text">{errors.length} 个单元格需修正</strong> : <strong className="success-text">校验通过</strong>}</div>{message && <div className="admin-message">{message}</div>}<div className="leader-import-sheet ht-theme-main"><HotTable data={tableRows} columns={importColumns.map((column) => ({ data: column.key, width: column.width }))} colHeaders={importColumns.map((column) => column.title)} rowHeaders={true} height={520} width="100%" stretchH="all" autoWrapRow={true} autoWrapCol={true} minSpareRows={6} manualColumnResize={true} contextMenu={["row_above", "row_below", "remove_row", "---------", "undo", "redo"]} copyPaste={true} comments={true} cells={(row, column) => { const key = importColumns[column]?.key; const error = key ? errorByCell.get(`${row}-${key}`) : undefined; const cellProperties: Handsontable.CellProperties = {} as Handsontable.CellProperties; if (error) { cellProperties.className = "leader-import-invalid"; cellProperties.comment = { value: error }; } return cellProperties; }} afterChange={updateRows} licenseKey="non-commercial-and-evaluation" /></div></section></>;
+  return <><AdminHeader title="小组长工序导入" description="直接从 Excel 粘贴或在单元格内编辑，格式错误会标红" action={canImportOperations && <button className="admin-primary-action" disabled={submitting || !rows.length || errors.length > 0} onClick={() => void submit()}><Upload />确认导入</button>} /><XftConfigPanel onSaved={setXftConfig} /><XftHoursImportPanel salaryPeriod={xftConfig.salaryPeriod} /><section className="admin-panel import-panel"><div className="import-summary"><span>已填写 {rows.length} 行</span>{errors.length > 0 ? <strong className="danger-text">{errors.length} 个单元格需修正</strong> : <strong className="success-text">校验通过</strong>}</div>{message && <div className="admin-message">{message}</div>}<div className="leader-import-sheet ht-theme-main"><HotTable data={tableRows} columns={importColumns.map((column) => ({ data: column.key, width: column.width }))} colHeaders={importColumns.map((column) => column.title)} rowHeaders={true} height={520} width="100%" stretchH="all" autoWrapRow={true} autoWrapCol={true} minSpareRows={6} manualColumnResize={true} contextMenu={["row_above", "row_below", "remove_row", "---------", "undo", "redo"]} copyPaste={true} comments={true} cells={(row, column) => { const key = importColumns[column]?.key; const error = key ? errorByCell.get(`${row}-${key}`) : undefined; const cellProperties: Handsontable.CellProperties = {} as Handsontable.CellProperties; if (error) { cellProperties.className = "leader-import-invalid"; cellProperties.comment = { value: error }; } return cellProperties; }} afterChange={updateRows} licenseKey="non-commercial-and-evaluation" /></div></section></>;
 }
 
 export function AssignmentAdminPage() {
+  const canAssignWorkers = useWorkReportStore((state) => !!state.capabilities?.canAssignWorkers);
+  const canForceRemoveAssignments = useWorkReportStore((state) => !!state.capabilities?.canForceRemoveAssignments);
   const [keyword, setKeyword] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [selectedPart, setSelectedPart] = useState("");
   const [operations, setOperations] = useState<ClaimableOperation[]>([]);
   const [assignTargetId, setAssignTargetId] = useState("");
   const [message, setMessage] = useState("");
-  const loadProducts = useCallback(() => workReportRepository.searchClaimableProducts(keyword), [keyword]);
+  const loadProducts = useCallback(() => canAssignWorkers ? workReportRepository.searchClaimableProducts(keyword) : Promise.resolve([]), [canAssignWorkers, keyword]);
   const { data: products = [], loading: productsLoading, reload } = useAsyncResource(loadProducts);
   const { data: assignments = [], loading: assignmentsLoading, reload: reloadAssignments } = useAsyncResource<OperationAssignment[]>(useCallback(() => workReportRepository.getAssignments(), []));
   const loadParts = async (productId: string) => {
@@ -268,6 +322,10 @@ export function AssignmentAdminPage() {
     setOperations(await workReportRepository.getClaimableOperations(partId));
   };
   const assign = async (operation: ClaimableOperation, worker: WorkerSummary) => {
+    if (!canAssignWorkers) {
+      setMessage("当前账号没有员工派工权限。");
+      return;
+    }
     setMessage("");
     await workReportRepository.adminAssignOperation({ operationId: operation.id, workerId: worker.id, workerName: worker.name });
     setMessage(`已将 ${operation.operationName} 分配给 ${worker.name}`);
@@ -276,12 +334,16 @@ export function AssignmentAdminPage() {
     await reloadAssignments();
   };
   const forceRemove = async (assignmentId: string) => {
+    if (!canForceRemoveAssignments) {
+      setMessage("当前账号没有强制移除权限。");
+      return;
+    }
     const reason = "管理员调整工单项目";
     await workReportRepository.adminRemoveAssignment(assignmentId, reason);
     setMessage("已由高级后台移除，并写入报工记录");
     await reloadAssignments();
   };
-  return <><AdminHeader title="人员工序分配" description="高级后台可分配工序，也可处理已开始或不可自删的工序" action={<div className="admin-inline-actions"><SearchBox value={keyword} onChange={setKeyword} /><button className="admin-primary-action" onClick={() => void reload()}><Search />搜索</button></div>} />{message && <div className="admin-message">{message}</div>}<div className="assignment-admin-grid"><section className="admin-panel settings-card"><div className="settings-icon"><UserPlus /></div><h2>产品与部件</h2>{productsLoading ? <LoadingTable /> : <div className="admin-choice-list">{products.map((item) => <button key={item.id} className={selectedProduct === item.id ? "selected" : ""} onClick={() => void loadParts(item.id)}><strong>{item.productCode}</strong><span>{item.productName}</span></button>)}</div>}<div className="admin-choice-list compact">{parts.map((item) => <button key={item.id} className={selectedPart === item.id ? "selected" : ""} onClick={() => void choosePart(item.id)}><strong>{item.partCode}</strong><span>{item.partNo && `[${item.partNo}] `}{item.partName}</span></button>)}</div></section><section className="admin-panel"><div className="table-wrap"><table><thead><tr><th>工序</th><th>部件</th><th>数量</th><th>工时</th><th>已领</th><th>操作</th></tr></thead><tbody>{operations.map((item) => <Fragment key={item.id}><tr><td><strong>{item.operationCode}</strong><small>{item.operationNo && `[${item.operationNo}] `}{item.operationName}</small></td><td>{item.partCode}</td><td>{item.plannedQuantity}</td><td>{item.estimatedHours}</td><td>{item.claimedWorkers}</td><td><button className="table-action" disabled={item.status !== "available"} onClick={() => setAssignTargetId((value) => value === item.id ? "" : item.id)}>选择人员</button></td></tr>{assignTargetId === item.id && <tr><td colSpan={6}><WorkerPicker operation={item} onAssigned={(worker) => assign(item, worker)} /></td></tr>}</Fragment>)}{!operations.length && <tr><td colSpan={6}>请选择产品和部件后查看工序。</td></tr>}</tbody></table></div></section></div><section className="admin-panel chart-panel"><div className="panel-heading"><div><h2>当前人员工序</h2><p>高级后台可移除已开始、自领或后台分配的异常工序</p></div></div>{assignmentsLoading ? <LoadingTable /> : <div className="table-wrap"><table><thead><tr><th>工单</th><th>产品/部件</th><th>工序</th><th>人员</th><th>来源</th><th>状态</th><th>员工可删</th><th>高级操作</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productCode}<small>{item.partCode}</small></td><td>{item.operationName}</td><td>{item.collaborators.join(" / ")}</td><td>{item.source === "self_claimed" ? "自主领取" : "后台分配"}</td><td><AdminStatus status={item.status} /></td><td>{canWorkerRemoveAssignment(item) ? "是" : "否"}</td><td><button className="table-action danger-action" onClick={() => void forceRemove(item.id)}><Trash2 />移除</button></td></tr>)}</tbody></table></div>}</section></>;
+  return <><AdminHeader title="人员工序分配" description="高级后台可分配工序，也可处理已开始或不可自删的工序" action={canAssignWorkers && <div className="admin-inline-actions"><SearchBox value={keyword} onChange={setKeyword} /><button className="admin-primary-action" onClick={() => void reload()}><Search />搜索</button></div>} />{message && <div className="admin-message">{message}</div>}{canAssignWorkers && <div className="assignment-admin-grid"><section className="admin-panel settings-card"><div className="settings-icon"><UserPlus /></div><h2>产品与部件</h2>{productsLoading ? <LoadingTable /> : <div className="admin-choice-list">{products.map((item) => <button key={item.id} className={selectedProduct === item.id ? "selected" : ""} onClick={() => void loadParts(item.id)}><strong>{item.productCode}</strong><span>{item.productName}</span></button>)}</div>}<div className="admin-choice-list compact">{parts.map((item) => <button key={item.id} className={selectedPart === item.id ? "selected" : ""} onClick={() => void choosePart(item.id)}><strong>{item.partCode}</strong><span>{item.partNo && `[${item.partNo}] `}{item.partName}</span></button>)}</div></section><section className="admin-panel"><div className="table-wrap"><table><thead><tr><th>工序</th><th>部件</th><th>数量</th><th>工时</th><th>已领</th><th>操作</th></tr></thead><tbody>{operations.map((item) => <Fragment key={item.id}><tr><td><strong>{item.operationCode}</strong><small>{item.operationNo && `[${item.operationNo}] `}{item.operationName}</small></td><td>{item.partCode}</td><td>{item.plannedQuantity}</td><td>{item.estimatedHours}</td><td>{item.claimedWorkers}</td><td><button className="table-action" disabled={item.status !== "available"} onClick={() => setAssignTargetId((value) => value === item.id ? "" : item.id)}>选择人员</button></td></tr>{assignTargetId === item.id && <tr><td colSpan={6}><WorkerPicker operation={item} onAssigned={(worker) => assign(item, worker)} /></td></tr>}</Fragment>)}{!operations.length && <tr><td colSpan={6}>请选择产品和部件后查看工序。</td></tr>}</tbody></table></div></section></div>}<section className="admin-panel chart-panel"><div className="panel-heading"><div><h2>当前人员工序</h2><p>高级后台可移除已开始、自领或后台分配的异常工序</p></div></div>{assignmentsLoading ? <LoadingTable /> : <div className="table-wrap"><table><thead><tr><th>工单</th><th>产品/部件</th><th>工序</th><th>人员</th><th>来源</th><th>状态</th><th>员工可删</th>{canForceRemoveAssignments && <th>高级操作</th>}</tr></thead><tbody>{assignments.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productCode}<small>{item.partCode}</small></td><td>{item.operationName}</td><td>{item.collaborators.join(" / ")}</td><td>{item.source === "self_claimed" ? "自主领取" : "后台分配"}</td><td><AdminStatus status={item.status} /></td><td>{canWorkerRemoveAssignment(item) ? "是" : "否"}</td>{canForceRemoveAssignments && <td><button className="table-action danger-action" onClick={() => void forceRemove(item.id)}><Trash2 />移除</button></td>}</tr>)}</tbody></table></div>}</section></>;
 }
 
 export function ReportsPage() {
@@ -332,12 +394,91 @@ export function PermissionsPage() {
   return <><AdminHeader title="权限设置" description="罗列所有人员，并为每个人选择权限组" action={<SearchBox value={search} onChange={setSearch} placeholder="搜索姓名、工号、班组或首字母" />} />{message && <div className="admin-message">{message}</div>}<div className="permission-summary-grid">{counts.map((item) => <article key={item.value} className="admin-panel permission-summary-card"><div className="settings-icon"><ShieldCheck /></div><div><strong>{item.count}</strong><span>{item.label}</span></div><p>{item.description}</p></article>)}</div><section className="admin-panel permission-panel">{loading ? <LoadingTable /> : error ? <AdminError message={error} retry={() => void reload()} /> : <div className="table-wrap"><table><thead><tr><th>人员</th><th>工号</th><th>班组</th><th>当前任务</th><th>权限组</th></tr></thead><tbody>{filtered.map((person) => <tr key={person.id}><td><div className="person-cell"><span>{person.name.slice(0,1)}</span><strong>{person.name}</strong></div></td><td>{person.employeeNo}</td><td>{person.teamName}</td><td>{person.activeAssignmentCount} 道</td><td><div className="permission-select-cell">{permissionOptions.map((option) => <button key={option.value} className={person.permissionGroup === option.value ? "selected" : ""} disabled={savingId === person.id} onClick={() => void updatePermission(person, option.value)}>{savingId === person.id && person.permissionGroup !== option.value ? <span className="spinner small" /> : option.label}</button>)}</div></td></tr>)}{!filtered.length && <tr><td colSpan={5}>没有匹配的人员。</td></tr>}</tbody></table></div>}</section></>;
 }
 
+const accountRoleOptions: Array<{ value: AccountRole; label: string }> = permissionOptions.map((option) => ({
+  value: option.value,
+  label: option.label,
+}));
+const emptyAccountForm = { username: "", name: "", password: "", enabled: true, roles: ["worker"] as AccountRole[] };
+
+function normalizeAccountRoles(roles: AccountRole[], role: AccountRole) {
+  return roles.includes(role) ? roles.filter((item) => item !== role) : [...roles, role];
+}
+
+export function AccountsPage() {
+  const [keyword, setKeyword] = useState("");
+  const [form, setForm] = useState(emptyAccountForm);
+  const [saving, setSaving] = useState(false);
+  const [savingId, setSavingId] = useState("");
+  const [resetPasswordById, setResetPasswordById] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("");
+  const load = useCallback(() => AuthService.getAdminAccounts(keyword.trim()), [keyword]);
+  const { data: accounts = [], loading, error, reload } = useAsyncResource<AdminAccount[]>(load);
+  const createAccount = async () => {
+    const username = form.username.trim();
+    const name = form.name.trim();
+    if (!username || !name || !form.password || form.roles.length === 0) {
+      setMessage("请填写账号、姓名、初始密码并至少选择一个权限组");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      await AuthService.createAdminAccount({ username, name, password: form.password, roles: form.roles, enabled: form.enabled });
+      setForm(emptyAccountForm);
+      setMessage(`已创建账号 ${username}`);
+      await reload();
+    } catch (err) {
+      setMessage(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const updateAccount = async (account: AdminAccount, input: { roles?: AccountRole[]; enabled?: boolean }) => {
+    setSavingId(account.id);
+    setMessage("");
+    try {
+      await AuthService.updateAdminAccount(account.id, input);
+      setMessage(`已更新账号 ${account.username}`);
+      await reload();
+    } catch (err) {
+      setMessage(getErrorMessage(err));
+    } finally {
+      setSavingId("");
+    }
+  };
+  const resetPassword = async (account: AdminAccount) => {
+    const password = resetPasswordById[account.id] || "";
+    if (!password) {
+      setMessage("请输入新密码");
+      return;
+    }
+    setSavingId(account.id);
+    setMessage("");
+    try {
+      await AuthService.resetAdminAccountPassword(account.id, password);
+      setResetPasswordById((current) => ({ ...current, [account.id]: "" }));
+      setMessage(`已重置 ${account.username} 的密码`);
+    } catch (err) {
+      setMessage(getErrorMessage(err));
+    } finally {
+      setSavingId("");
+    }
+  };
+  return <><AdminHeader title="账号管理" description="管理员创建网页登录账号，外部不开放注册" action={<div className="admin-inline-actions"><SearchBox value={keyword} onChange={setKeyword} placeholder="搜索账号或姓名" /><button className="admin-primary-action" onClick={() => void reload()}><Search />搜索</button></div>} />{message && <div className="admin-message">{message}</div>}<div className="account-admin-grid"><section className="admin-panel settings-card"><div className="settings-icon"><UserCog /></div><h2>创建账号</h2><label className="admin-field">账号<input value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} placeholder="例如 zhangsan" /></label><label className="admin-field">姓名<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="员工姓名" /></label><label className="admin-field">初始密码<input type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder="由管理员设置" /></label><div className="admin-field"><span>权限组</span><div className="permission-select-cell">{accountRoleOptions.map((option) => <button key={option.value} className={form.roles.includes(option.value) ? "selected" : ""} type="button" onClick={() => setForm((current) => ({ ...current, roles: normalizeAccountRoles(current.roles, option.value) }))}>{option.label}</button>)}</div></div><label className="admin-toggle-row"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))} />启用账号</label><button className="admin-primary-action full-width" disabled={saving} onClick={() => void createAccount()}><UserPlus />创建账号</button></section><section className="admin-panel account-list-panel">{loading ? <LoadingTable /> : error ? <AdminError message={error} retry={() => void reload()} /> : <div className="table-wrap"><table><thead><tr><th>账号</th><th>姓名</th><th>权限组</th><th>状态</th><th>最近登录</th><th>重置密码</th><th>操作</th></tr></thead><tbody>{accounts.map((account) => <tr key={account.id}><td><strong>{account.username}</strong></td><td>{account.name}</td><td><div className="permission-select-cell">{accountRoleOptions.map((option) => <button key={option.value} className={account.roles.includes(option.value) ? "selected" : ""} disabled={savingId === account.id} onClick={() => void updateAccount(account, { roles: normalizeAccountRoles(account.roles, option.value) })}>{option.label}</button>)}</div></td><td><span className={`admin-status ${account.enabled ? "completed" : "paused"}`}>{account.enabled ? "已启用" : "已停用"}</span></td><td>{account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString("zh-CN") : "未登录"}</td><td><div className="reset-password-cell"><input type="password" value={resetPasswordById[account.id] || ""} onChange={(event) => setResetPasswordById((current) => ({ ...current, [account.id]: event.target.value }))} placeholder="新密码" /><button className="table-action" disabled={savingId === account.id} onClick={() => void resetPassword(account)}><KeyRound />重置</button></div></td><td><button className={account.enabled ? "table-action danger-action" : "table-action"} disabled={savingId === account.id} onClick={() => void updateAccount(account, { enabled: !account.enabled })}><Power />{account.enabled ? "停用" : "启用"}</button></td></tr>)}{!accounts.length && <tr><td colSpan={7}>没有匹配的账号。</td></tr>}</tbody></table></div>}</section></div></>;
+}
+
 export function ExceptionsPage() {
+  const canReviewExceptions = useWorkReportStore((state) => !!state.capabilities?.canReviewExceptions);
   const load = useCallback(() => workReportRepository.getExceptions(), []);
   const { data: items = [], loading, error, reload } = useAsyncResource<ProductionException[]>(load);
+  const resolve = async (id: string) => {
+    if (!canReviewExceptions) return;
+    await workReportRepository.resolveException(id);
+    await reload();
+  };
   if (loading) return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><LoadingTable /></>;
   if (error) return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><AdminError message={error} retry={() => void reload()} /></>;
-  return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><div className="exception-list">{items.map((item) => <article key={item.id} className={item.status}><div className="exception-icon"><AlertTriangle /></div><div><div><h2>{item.title}</h2><span>{item.status === "open" ? "待处理" : "已处理"}</span></div><p>{item.detail}</p><small>{item.orderNo} · {new Date(item.createdAt).toLocaleString("zh-CN")}</small></div>{item.status === "open" && <button onClick={() => void workReportRepository.resolveException(item.id).then(() => reload())}>标记为已处理</button>}</article>)}</div></>;
+  return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><div className="exception-list">{items.map((item) => <article key={item.id} className={item.status}><div className="exception-icon"><AlertTriangle /></div><div><div><h2>{item.title}</h2><span>{item.status === "open" ? "待处理" : "已处理"}</span></div><p>{item.detail}</p><small>{item.orderNo} · {new Date(item.createdAt).toLocaleString("zh-CN")}</small></div>{canReviewExceptions && item.status === "open" && <button onClick={() => void resolve(item.id)}>标记为已处理</button>}</article>)}</div></>;
 }
 
 export function SettingsPage() {

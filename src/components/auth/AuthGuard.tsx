@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { LoadingScreen } from "./LoadingScreen";
-import { WeComLoginPanel } from "./WeComLoginPanel";
+import { LoginPage } from "./LoginPage";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -48,7 +48,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   if (showLoginPanel) {
     const redirect = `${location.pathname}${location.search}${location.hash}`;
-    return <WeComLoginPanel redirect={redirect} />;
+    return <LoginPage redirect={redirect} />;
   }
 
   if (isLoading || !authChecked) {

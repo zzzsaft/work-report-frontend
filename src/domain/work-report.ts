@@ -104,6 +104,18 @@ export interface UserCapabilities {
   canViewAllTeams: boolean;
 }
 
+export type AdminRouteKey =
+  | "dashboard"
+  | "orders"
+  | "import"
+  | "assignments"
+  | "reports"
+  | "people"
+  | "permissions"
+  | "accounts"
+  | "exceptions"
+  | "settings";
+
 export type PermissionGroup = "worker" | "leader" | "admin";
 
 export interface WorkerSummary {
@@ -144,6 +156,7 @@ export interface ClaimableOperation {
   orderNo: string;
   productCode: string;
   productName: string;
+  partNo?: string;
   partCode: string;
   partName: string;
   operationNo: string;
@@ -171,6 +184,47 @@ export interface LeaderImportResult {
   accepted: number;
   rejected: number;
   errors: Array<{ row: number; message: string }>;
+  items?: unknown[];
+}
+
+export interface XftConfig {
+  host: string;
+  appid: string;
+  appSecret?: string;
+  enterpriseId: string;
+  defaultUserId: string;
+  defaultPlatformUserId: string;
+  dataCollectionName: string;
+  importType: string;
+  salaryPeriod: string;
+  workHoursFieldKey: string;
+  isCheckEmpty: boolean;
+  enabled: boolean;
+  hasAppSecret?: boolean;
+}
+
+export interface XftHoursRow {
+  lineId: number;
+  staffName: string;
+  staffNumber: string;
+  hours: number;
+  identityNumber: string;
+  staffId: string;
+}
+
+export interface XftManualHoursDraft {
+  staffName: string;
+  staffNumber: string;
+  hours: number;
+  identityNumber?: string;
+  staffId?: string;
+}
+
+export interface XftImportResult {
+  accepted: number;
+  rejected: number;
+  items: Array<{ lineId: number; staffName: string; staffNumber: string; hours: number }>;
+  errors: Array<{ row: number; staffName?: string; staffNumber?: string; message: string; errorCode?: string }>;
 }
 
 export interface DashboardSummary {
@@ -284,6 +338,49 @@ export function canSwitchFromAssignment(assignment?: OperationAssignment | null)
 
 export function canWorkerRemoveAssignment(assignment: OperationAssignment) {
   return assignment.source === "self_claimed" && assignment.status === "assigned" && assignment.canWorkerRemove;
+}
+
+export function canManagePermissions(capabilities?: UserCapabilities | null) {
+  return !!(
+    capabilities?.canAssignWorkers &&
+    capabilities.canForceRemoveAssignments &&
+    capabilities.canViewAllTeams
+  );
+}
+
+export function canAccessAdminRoute(capabilities: UserCapabilities | null | undefined, routeKey: AdminRouteKey) {
+  if (!capabilities?.canViewAdmin) return false;
+  const routeAccess: Record<AdminRouteKey, boolean> = {
+    dashboard: capabilities.canViewAdmin,
+    orders: capabilities.canViewAdmin,
+    import: capabilities.canImportOperations,
+    assignments: capabilities.canAssignWorkers || capabilities.canForceRemoveAssignments,
+    reports: capabilities.canViewAdmin,
+    people: capabilities.canViewAdmin,
+    permissions: canManagePermissions(capabilities),
+    accounts: canManagePermissions(capabilities),
+    exceptions: capabilities.canReviewExceptions,
+    settings: capabilities.canViewAdmin,
+  };
+  return routeAccess[routeKey];
+}
+
+const parseNumericCode = (value?: string | null) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const number = Number(trimmed);
+  return Number.isFinite(number) ? number : null;
+};
+
+export function sortByNumericCode<T>(items: T[], getCode: (item: T) => string | undefined | null) {
+  return [...items].sort((left, right) => {
+    const leftCode = parseNumericCode(getCode(left));
+    const rightCode = parseNumericCode(getCode(right));
+    if (leftCode === null && rightCode === null) return 0;
+    if (leftCode === null) return 1;
+    if (rightCode === null) return -1;
+    return leftCode - rightCode;
+  });
 }
 
 export function getSessionElapsedSeconds(session?: WorkSession, now = Date.now()) {

@@ -1,0 +1,5 @@
+@media (min-width: 600px) { .action-dock { right: 50%; left: auto; width: 520px; transform: translateX(50%); } }
+
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: 1fr 1fr; }
+
+.settings-grid { grid-template-columns: 1fr; } }

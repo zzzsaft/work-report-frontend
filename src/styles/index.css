@@ -1,0 +1,17 @@
+@import "./base.css";
+@import "./features/auth.css";
+
+@import "./work-report/tokens.css";
+@import "./layouts/mobile.css";
+@import "./components/work-report-shared.css";
+@import "./layouts/admin.css";
+@import "./responsive/work-report-base.css";
+@import "./features/order-management.css";
+@import "./responsive/work-report-shell.css";
+@import "./features/current-operation.css";
+@import "./components/empty-state.css";
+@import "./features/claim.css";
+@import "./features/stats.css";
+@import "./features/admin-work-report.css";
+@import "./features/accounts-permissions.css";
+@import "./responsive/work-report-features.css";

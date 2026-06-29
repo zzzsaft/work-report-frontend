@@ -1,0 +1,27 @@
+:root {
+  --navy-950: #06245b;
+  --navy-900: #07357c;
+  --blue-700: #0b4db7;
+  --blue-600: #145fd1;
+  --blue-50: #eef5ff;
+  --ink: #101828;
+  --muted: #667085;
+  --line: #dfe5ec;
+  --surface: #fff;
+  --canvas: #f4f7fa;
+  --success: #149a55;
+  --success-bg: #e9f8ef;
+  --warning: #d97706;
+  --warning-bg: #fff5df;
+  --danger: #c93434;
+  --danger-bg: #fff0f0;
+  color: var(--ink);
+  background: var(--canvas);
+  font-family: Inter, "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+button, input, select, textarea { font: inherit; }
+
+button { cursor: pointer; }
+
+button:disabled { cursor: not-allowed; opacity: .62; }

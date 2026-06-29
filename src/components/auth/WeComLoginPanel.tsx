@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import {
   createLoginState,
-  createWeComOAuthUrl,
   isWeComBrowser,
   mountWeComLoginPanel,
 } from "@/utils/wecom";
 
-export function WeComLoginPanel({ redirect }: { redirect: string }) {
+export function WeComLoginPanel({
+  redirect,
+  onBack,
+}: {
+  redirect: string;
+  onBack?: () => void;
+}) {
   const panelElement = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
+  const isAutoLogin = isWeComBrowser();
 
   useEffect(() => {
     if (!panelElement.current) return;
@@ -17,11 +23,6 @@ export function WeComLoginPanel({ redirect }: { redirect: string }) {
     let panel: ReturnType<typeof mountWeComLoginPanel> | undefined;
 
     try {
-      if (isWeComBrowser()) {
-        window.location.replace(createWeComOAuthUrl(state));
-        return;
-      }
-
       panel = mountWeComLoginPanel({
         element: panelElement.current,
         state,
@@ -51,9 +52,14 @@ export function WeComLoginPanel({ redirect }: { redirect: string }) {
     <main className="wecom-login-page">
       <section className="wecom-login-card">
         <h1>企业微信登录</h1>
-        <p>请在下方登录面板中完成身份验证</p>
+        <p>{isAutoLogin ? "正在打开企业微信登录..." : "请在下方登录面板中完成身份验证"}</p>
         <div className="wecom-panel" ref={panelElement} />
         {error && <div className="wecom-panel-error">{error}</div>}
+        {onBack && (
+          <button className="login-secondary-button" type="button" onClick={onBack}>
+            返回账号密码登录
+          </button>
+        )}
       </section>
     </main>
   );

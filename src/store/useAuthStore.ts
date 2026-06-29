@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { AuthService, type AuthUser } from "@/api/services/auth.service";
+import { useWorkReportStore } from "@/store/useWorkReportStore";
 
 interface AuthState {
   token: string | null;
@@ -11,6 +12,7 @@ interface AuthState {
   isLoading: boolean;
   checkAuth: () => Promise<boolean>;
   loginWithCode: (code: string) => Promise<void>;
+  loginWithPassword: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -42,9 +44,11 @@ export const useAuthStore = create<AuthState>()(
         try {
           const user = await AuthService.getUserInfo();
           set({ ...userState(user), ...(user.token ? { token: user.token } : {}) });
+          await useWorkReportStore.getState().loadCapabilities({ force: true });
           return true;
         } catch {
           set(loggedOutState);
+          useWorkReportStore.getState().clearWorkReportState();
           return false;
         } finally {
           set({ isLoading: false });
@@ -60,15 +64,39 @@ export const useAuthStore = create<AuthState>()(
           set({ token });
           const user = await AuthService.getUserInfo();
           set(userState(user));
+          await useWorkReportStore.getState().loadCapabilities({ force: true });
         } catch (error) {
           set(loggedOutState);
+          useWorkReportStore.getState().clearWorkReportState();
           throw error;
         } finally {
           set({ isLoading: false });
         }
       },
 
-      logout: () => set(loggedOutState),
+      loginWithPassword: async (username, password) => {
+        if (get().isLoading) return;
+
+        set({ isLoading: true });
+        try {
+          const { token } = await AuthService.loginWithPassword(username, password);
+          set({ token });
+          const user = await AuthService.getUserInfo();
+          set(userState(user));
+          await useWorkReportStore.getState().loadCapabilities({ force: true });
+        } catch (error) {
+          set(loggedOutState);
+          useWorkReportStore.getState().clearWorkReportState();
+          throw error;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      logout: () => {
+        set(loggedOutState);
+        useWorkReportStore.getState().clearWorkReportState();
+      },
     }),
     {
       name: "auth-storage",

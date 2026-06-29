@@ -7,10 +7,14 @@ import {
   getSwitchableAssignmentsForDate,
   getCurrentSwitchCandidatesForDate,
   canSwitchFromAssignment,
+  canAccessAdminRoute,
+  canManagePermissions,
   canWorkerRemoveAssignment,
   isActiveOperationStatus,
   isAssignmentOnDate,
+  sortByNumericCode,
   type OperationAssignment,
+  type UserCapabilities,
   type WorkSession,
 } from "./work-report";
 
@@ -25,6 +29,18 @@ const assignment = (overrides: Partial<OperationAssignment> = {}): OperationAssi
   operationCode: "OP-1", operationName: "工序", operationNote: "", plannedQuantity: 1,
   plannedStart: "2026-06-23T08:00:00+08:00", plannedEnd: "2026-06-23T09:00:00+08:00",
   collaborators: [], source: "assigned", canWorkerRemove: false, status: "assigned", ...overrides,
+});
+
+const capabilities = (overrides: Partial<UserCapabilities> = {}): UserCapabilities => ({
+  roles: ["worker"],
+  canViewAdmin: false,
+  canAssignWorkers: false,
+  canReviewExceptions: false,
+  canImportOperations: false,
+  canViewTeamOperations: false,
+  canForceRemoveAssignments: false,
+  canViewAllTeams: false,
+  ...overrides,
 });
 
 describe("assignment date and status selectors", () => {
@@ -84,5 +100,54 @@ describe("work session time", () => {
 
   it("formats long durations without wrapping at 24 hours", () => {
     expect(formatDuration(27 * 3600 + 62)).toBe("27:01:02");
+  });
+});
+
+describe("capability helpers", () => {
+  it("keeps worker accounts out of admin routes", () => {
+    const worker = capabilities();
+    expect(canAccessAdminRoute(worker, "dashboard")).toBe(false);
+    expect(canAccessAdminRoute(worker, "import")).toBe(false);
+    expect(canManagePermissions(worker)).toBe(false);
+  });
+
+  it("maps leader capabilities to import, exceptions, and team views without permissions management", () => {
+    const leader = capabilities({
+      roles: ["worker", "leader"],
+      canViewAdmin: true,
+      canImportOperations: true,
+      canReviewExceptions: true,
+      canViewTeamOperations: true,
+    });
+    expect(canAccessAdminRoute(leader, "dashboard")).toBe(true);
+    expect(canAccessAdminRoute(leader, "orders")).toBe(true);
+    expect(canAccessAdminRoute(leader, "import")).toBe(true);
+    expect(canAccessAdminRoute(leader, "exceptions")).toBe(true);
+    expect(canAccessAdminRoute(leader, "assignments")).toBe(false);
+    expect(canAccessAdminRoute(leader, "permissions")).toBe(false);
+    expect(canManagePermissions(leader)).toBe(false);
+  });
+
+  it("derives admin permissions management from assign, force remove, and all-team capabilities", () => {
+    const admin = capabilities({
+      roles: ["worker", "leader", "admin"],
+      canViewAdmin: true,
+      canAssignWorkers: true,
+      canReviewExceptions: true,
+      canImportOperations: true,
+      canViewTeamOperations: true,
+      canForceRemoveAssignments: true,
+      canViewAllTeams: true,
+    });
+    expect(canAccessAdminRoute(admin, "assignments")).toBe(true);
+    expect(canAccessAdminRoute(admin, "permissions")).toBe(true);
+    expect(canManagePermissions(admin)).toBe(true);
+  });
+});
+
+describe("numeric code sorting", () => {
+  it("sorts numeric strings by numeric value and leaves invalid values at the end", () => {
+    const items = [{ code: "10" }, { code: "" }, { code: "2" }, { code: "OP-1" }, { code: "01" }, { code: undefined }];
+    expect(sortByNumericCode(items, (item) => item.code).map((item) => item.code)).toEqual(["01", "2", "10", "", "OP-1", undefined]);
   });
 });

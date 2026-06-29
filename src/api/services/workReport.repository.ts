@@ -15,6 +15,10 @@ import type {
   WorkerPermission,
   WorkerSummary,
   WorkOrder,
+  XftConfig,
+  XftHoursRow,
+  XftImportResult,
+  XftManualHoursDraft,
 } from "@/domain/work-report";
 
 export interface CompletionInput {
@@ -54,6 +58,11 @@ export interface WorkReportRepository {
   getExceptions(): Promise<ProductionException[]>;
   resolveException(id: string): Promise<void>;
   importLeaderOperations(rows: LeaderImportDraft[]): Promise<LeaderImportResult>;
+  getXftConfig(): Promise<XftConfig>;
+  saveXftConfig(config: XftConfig): Promise<XftConfig>;
+  previewXftHours(salaryPeriod?: string): Promise<XftHoursRow[]>;
+  importXftHours(salaryPeriod?: string): Promise<XftImportResult>;
+  importManualXftHours(rows: XftManualHoursDraft[], salaryPeriod?: string): Promise<XftImportResult>;
   adminAssignOperation(input: AdminAssignOperationInput): Promise<void>;
   adminRemoveAssignment(assignmentId: string, reason: string): Promise<void>;
   resetDemo?(scenario?: "assigned" | "running" | "paused"): Promise<void>;

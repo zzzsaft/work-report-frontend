@@ -1,5 +1,6 @@
 import { BarChart3, ClipboardList, ListChecks, UserRound } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import styles from "./MobileLayout.module.less";
 
 const navItems = [
   { to: "/work/claim", label: "领取工序", icon: ClipboardList },
@@ -10,11 +11,11 @@ const navItems = [
 
 export default function MobileLayout() {
   return (
-    <div className="mobile-shell">
-      <main className="mobile-main"><Outlet /></main>
-      <nav className="mobile-nav" aria-label="主要导航">
+    <div className={styles.shell}>
+      <main className={styles.main}><Outlet /></main>
+      <nav className={styles.nav} aria-label="主要导航">
         {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} replace className={({ isActive }) => isActive ? "active" : ""}>
+          <NavLink key={to} to={to} replace className={({ isActive }) => isActive ? styles.active : ""}>
             <Icon aria-hidden="true" /><span>{label}</span>
           </NavLink>
         ))}

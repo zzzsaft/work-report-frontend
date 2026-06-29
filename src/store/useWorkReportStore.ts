@@ -27,7 +27,7 @@ interface WorkReportState {
   loadCurrent: () => Promise<void>;
   loadAssignments: () => Promise<void>;
   loadStatistics: (period: LaborStatistics["period"]) => Promise<void>;
-  loadCapabilities: () => Promise<void>;
+  loadCapabilities: (options?: { force?: boolean }) => Promise<void>;
   searchClaimableProducts: (keyword: string) => Promise<void>;
   loadRecentClaimableOperations: () => Promise<void>;
   loadClaimableParts: (productId: string) => Promise<void>;
@@ -40,8 +40,23 @@ interface WorkReportState {
   complete: (input: CompletionInput) => Promise<void>;
   selectNext: (assignment: OperationAssignment) => void;
   switchCurrent: (assignment: OperationAssignment) => Promise<void>;
+  clearWorkReportState: () => void;
   clearError: () => void;
 }
+
+const emptyWorkReportState = {
+  current: null,
+  assignments: [],
+  statistics: null,
+  capabilities: null,
+  nextCandidates: [],
+  switchCandidates: [],
+  claimProducts: [],
+  claimParts: [],
+  claimOperations: [],
+  recentClaimOperations: [],
+  dayCompleted: false,
+};
 
 export const useWorkReportStore = create<WorkReportState>((set, get) => {
   let currentRequest = 0;
@@ -58,7 +73,7 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
     finally { set({ actionLoading: false }); }
   };
   return {
-    current: null, assignments: [], statistics: null, capabilities: null, nextCandidates: [], switchCandidates: [], claimProducts: [], claimParts: [], claimOperations: [], recentClaimOperations: [], dayCompleted: false,
+    ...emptyWorkReportState,
     currentLoading: false, assignmentsLoading: false, statisticsLoading: false, capabilitiesLoading: false, claimLoading: false,
     actionLoading: false, error: null,
     loadCurrent: async () => {
@@ -104,8 +119,8 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
         if (request === statisticsRequest) set({ statisticsLoading: false });
       }
     },
-    loadCapabilities: async () => {
-      if (get().capabilities || get().capabilitiesLoading) return;
+    loadCapabilities: async (options) => {
+      if (!options?.force && (get().capabilities || get().capabilitiesLoading)) return;
       const request = ++capabilitiesRequest;
       set({ capabilitiesLoading: true, error: null });
       try {
@@ -196,6 +211,22 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
         set({ current: selected, assignments, switchCandidates: getCurrentSwitchCandidatesForDate(assignments, new Date(), selected.id), dayCompleted: false });
       } catch (error) { set({ error: getErrorMessage(error) }); throw error; }
       finally { set({ actionLoading: false }); }
+    },
+    clearWorkReportState: () => {
+      currentRequest += 1;
+      assignmentsRequest += 1;
+      statisticsRequest += 1;
+      capabilitiesRequest += 1;
+      set({
+        ...emptyWorkReportState,
+        currentLoading: false,
+        assignmentsLoading: false,
+        statisticsLoading: false,
+        capabilitiesLoading: false,
+        claimLoading: false,
+        actionLoading: false,
+        error: null,
+      });
     },
     clearError: () => set({ error: null }),
   };

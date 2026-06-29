@@ -1,14 +1,26 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { workReportRepository } from "@/api/services/workReport.service";
-import type { LaborStatistics, OperationAssignment } from "@/domain/work-report";
+import type { LaborStatistics, OperationAssignment, UserCapabilities } from "@/domain/work-report";
 import { useWorkReportStore } from "./useWorkReportStore";
 
 const originalGetAssignments = workReportRepository.getAssignments;
 const originalGetStatistics = workReportRepository.getStatistics;
+const originalGetCapabilities = workReportRepository.getCapabilities;
 
 const statistics = (period: LaborStatistics["period"]): LaborStatistics => ({
   period, totalHours: 1, regularHours: 1, overtimeHours: 0, completedOperations: 1,
   attendanceDays: 1, trend: [],
+});
+
+const capabilities = (canViewAdmin: boolean): UserCapabilities => ({
+  roles: canViewAdmin ? ["worker", "leader"] : ["worker"],
+  canViewAdmin,
+  canAssignWorkers: false,
+  canReviewExceptions: false,
+  canImportOperations: false,
+  canViewTeamOperations: false,
+  canForceRemoveAssignments: false,
+  canViewAllTeams: false,
 });
 
 function deferred<T>() {
@@ -20,8 +32,9 @@ function deferred<T>() {
 afterEach(() => {
   workReportRepository.getAssignments = originalGetAssignments;
   workReportRepository.getStatistics = originalGetStatistics;
+  workReportRepository.getCapabilities = originalGetCapabilities;
   useWorkReportStore.setState({
-    assignments: [], statistics: null, assignmentsLoading: false, statisticsLoading: false, error: null,
+    assignments: [], statistics: null, capabilities: null, assignmentsLoading: false, statisticsLoading: false, capabilitiesLoading: false, error: null,
   });
 });
 
@@ -57,5 +70,20 @@ describe("work report request state", () => {
 
     expect(useWorkReportStore.getState().statistics?.period).toBe("month");
     expect(useWorkReportStore.getState().statisticsLoading).toBe(false);
+  });
+
+  it("reloads capabilities when force is true and overwrites the cached state", async () => {
+    let calls = 0;
+    workReportRepository.getCapabilities = async () => capabilities(++calls > 1);
+
+    await useWorkReportStore.getState().loadCapabilities();
+    expect(useWorkReportStore.getState().capabilities?.canViewAdmin).toBe(false);
+
+    await useWorkReportStore.getState().loadCapabilities();
+    expect(calls).toBe(1);
+
+    await useWorkReportStore.getState().loadCapabilities({ force: true });
+    expect(calls).toBe(2);
+    expect(useWorkReportStore.getState().capabilities?.canViewAdmin).toBe(true);
   });
 });
