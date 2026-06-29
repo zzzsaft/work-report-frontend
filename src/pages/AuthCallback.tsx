@@ -8,13 +8,20 @@ import { parseLoginState } from "@/utils/wecom";
 
 export default function AuthCallback() {
   const handled = useRef(false);
+  const mountedRef = useRef(true);
   const [error, setError] = useState<AuthErrorDetails | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const loginWithCode = useAuthStore((state) => state.loginWithCode);
 
   useEffect(() => {
-    if (handled.current) return;
+    mountedRef.current = true;
+
+    if (handled.current) {
+      return () => {
+        mountedRef.current = false;
+      };
+    }
     handled.current = true;
 
     const code = searchParams.get("code");
@@ -30,13 +37,18 @@ export default function AuthCallback() {
     const verify = async () => {
       try {
         await loginWithCode(code);
+        if (!mountedRef.current) return;
         navigate(parseLoginState(searchParams.get("state")), { replace: true });
       } catch (verifyError) {
-        setError(describeAuthError(verifyError, code));
+        if (mountedRef.current) setError(describeAuthError(verifyError, code));
       }
     };
 
     void verify();
+
+    return () => {
+      mountedRef.current = false;
+    };
   }, [loginWithCode, navigate, searchParams]);
 
   if (error) {

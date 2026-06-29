@@ -1,8 +1,14 @@
 import { workReportClient } from "@/api/http/workReportClient";
-import type { AdminAssignOperationInput, CompletionInput, WorkReportRepository } from "./workReport.repository";
+import type { AdminAssignOperationInput, CompletionInput, PaginatedResult, WorkReportRepository } from "./workReport.repository";
 import { sortByNumericCode, type WorkOrder } from "@/domain/work-report";
 
 const normalizeOrders = (data: WorkOrder[] | { items?: WorkOrder[] }) => Array.isArray(data) ? data : data.items ?? [];
+const normalizePage = <T>(data: T[] | Partial<PaginatedResult<T>>, page: number, pageSize: number): PaginatedResult<T> => {
+  if (Array.isArray(data)) return { items: data, page, pageSize, total: data.length, hasMore: false };
+  const items = data.items ?? [];
+  const total = data.total ?? items.length;
+  return { items, page: data.page ?? page, pageSize: data.pageSize ?? pageSize, total, hasMore: data.hasMore ?? page * pageSize < total };
+};
 
 export const realWorkReportRepository: WorkReportRepository = {
   async getCapabilities() { return (await workReportClient.get("/me/capabilities")).data; },
@@ -13,7 +19,7 @@ export const realWorkReportRepository: WorkReportRepository = {
   async pauseAssignment(id, reason) { return (await workReportClient.post(`/assignments/${id}/pause`, { reason })).data; },
   async resumeAssignment(id) { return (await workReportClient.post(`/assignments/${id}/resume`)).data; },
   async completeAssignment(id, input: CompletionInput) { return (await workReportClient.post(`/assignments/${id}/complete`, input)).data; },
-  async searchClaimableProducts(keyword) { return (await workReportClient.get("/claim/products", { params: { keyword } })).data; },
+  async searchClaimableProducts(keyword, page, pageSize) { return normalizePage((await workReportClient.get("/claim/products", { params: { keyword, page, pageSize } })).data, page, pageSize); },
   async getClaimableParts(productId) { return sortByNumericCode((await workReportClient.get(`/claim/products/${productId}/parts`)).data, (item) => item.partNo); },
   async getClaimableOperations(partId) { return sortByNumericCode((await workReportClient.get(`/claim/parts/${partId}/operations`)).data, (item) => item.operationNo); },
   async claimOperation(operationId) { return (await workReportClient.post(`/claim/operations/${operationId}/claim`)).data; },

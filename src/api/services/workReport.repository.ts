@@ -33,6 +33,14 @@ export interface AdminAssignOperationInput {
   workerName: string;
 }
 
+export interface PaginatedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+}
+
 export interface WorkReportRepository {
   getCapabilities(): Promise<UserCapabilities>;
   getCurrentAssignment(): Promise<OperationAssignment | null>;
@@ -42,7 +50,7 @@ export interface WorkReportRepository {
   pauseAssignment(id: string, reason?: string): Promise<OperationAssignment>;
   resumeAssignment(id: string): Promise<OperationAssignment>;
   completeAssignment(id: string, input: CompletionInput): Promise<OperationAssignment>;
-  searchClaimableProducts(keyword: string): Promise<ClaimableProduct[]>;
+  searchClaimableProducts(keyword: string, page: number, pageSize: number): Promise<PaginatedResult<ClaimableProduct>>;
   getClaimableParts(productId: string): Promise<ClaimablePart[]>;
   getClaimableOperations(partId: string): Promise<ClaimableOperation[]>;
   claimOperation(operationId: string): Promise<OperationAssignment>;

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { workReportRepository } from "@/api/services/workReport.service";
 import type { ClaimableOperation, ClaimablePart, ClaimableProduct, LaborStatistics, OperationAssignment, UserCapabilities } from "@/domain/work-report";
-import type { CompletionInput } from "@/api/services/workReport.repository";
+import type { CompletionInput, PaginatedResult } from "@/api/services/workReport.repository";
 import { canSwitchFromAssignment, getCurrentSwitchCandidatesForDate, getPendingAssignmentsForDate, getSwitchableAssignmentsForDate } from "@/domain/work-report";
 import { getErrorMessage } from "@/utils/errors";
 
@@ -13,6 +13,7 @@ interface WorkReportState {
   nextCandidates: OperationAssignment[];
   switchCandidates: OperationAssignment[];
   claimProducts: ClaimableProduct[];
+  claimProductsPagination: PaginatedResult<ClaimableProduct>;
   claimParts: ClaimablePart[];
   claimOperations: ClaimableOperation[];
   recentClaimOperations: ClaimableOperation[];
@@ -28,7 +29,7 @@ interface WorkReportState {
   loadAssignments: () => Promise<void>;
   loadStatistics: (period: LaborStatistics["period"]) => Promise<void>;
   loadCapabilities: (options?: { force?: boolean }) => Promise<void>;
-  searchClaimableProducts: (keyword: string) => Promise<void>;
+  searchClaimableProducts: (keyword: string, page?: number, pageSize?: number) => Promise<void>;
   loadRecentClaimableOperations: () => Promise<void>;
   loadClaimableParts: (productId: string) => Promise<void>;
   loadClaimableOperations: (partId: string) => Promise<void>;
@@ -52,6 +53,7 @@ const emptyWorkReportState = {
   nextCandidates: [],
   switchCandidates: [],
   claimProducts: [],
+  claimProductsPagination: { items: [], page: 1, pageSize: 4, total: 0, hasMore: false },
   claimParts: [],
   claimOperations: [],
   recentClaimOperations: [],
@@ -60,10 +62,17 @@ const emptyWorkReportState = {
 
 const recentClaimProductBatchSize = 6;
 const recentClaimOperationLimit = 12;
+const claimProductPageSize = 4;
 
 const loadRecentClaimableOperations = async () => {
-  const products = await workReportRepository.searchClaimableProducts("");
+  const products: ClaimableProduct[] = [];
   const operations: ClaimableOperation[] = [];
+
+  for (let page = 1; products.length < recentClaimProductBatchSize || operations.length < recentClaimOperationLimit; page += 1) {
+    const result = await workReportRepository.searchClaimableProducts("", page, recentClaimProductBatchSize);
+    products.push(...result.items);
+    if (!result.hasMore || products.length >= recentClaimProductBatchSize * 3) break;
+  }
 
   for (let start = 0; start < products.length && operations.length < recentClaimOperationLimit; start += recentClaimProductBatchSize) {
     const productBatch = products.slice(start, start + recentClaimProductBatchSize);
@@ -150,9 +159,12 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
         if (request === capabilitiesRequest) set({ capabilitiesLoading: false });
       }
     },
-    searchClaimableProducts: async (keyword) => {
+    searchClaimableProducts: async (keyword, page = 1, pageSize = claimProductPageSize) => {
       set({ claimLoading: true, error: null });
-      try { set({ claimProducts: await workReportRepository.searchClaimableProducts(keyword), claimParts: [], claimOperations: [] }); }
+      try {
+        const result = await workReportRepository.searchClaimableProducts(keyword, page, pageSize);
+        set({ claimProducts: result.items, claimProductsPagination: result, claimParts: [], claimOperations: [] });
+      }
       catch (error) { set({ error: getErrorMessage(error) }); }
       finally { set({ claimLoading: false }); }
     },

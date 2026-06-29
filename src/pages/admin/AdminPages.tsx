@@ -116,7 +116,7 @@ export function OrdersPage() {
     if (!nextOpen || parts[order.id]) return;
     setPanelLoading(order.id);
     try {
-      const products = await workReportRepository.searchClaimableProducts(order.orderNo);
+      const { items: products } = await workReportRepository.searchClaimableProducts(order.orderNo, 1, 20);
       const product = products.find((item) => item.orderNo === order.orderNo || item.productCode === order.productCode) || products[0];
       const loadedParts = product ? await workReportRepository.getClaimableParts(product.id) : [];
       setParts((current) => ({ ...current, [order.id]: loadedParts }));
@@ -179,6 +179,7 @@ function WorkerPicker({ operation, onAssigned }: { operation: ClaimableOperation
   const pageSize = 5;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const requestRef = useRef(0);
+  const mountedRef = useRef(true);
   const [keyword, setKeyword] = useState("");
   const [workers, setWorkers] = useState<WorkerSummary[]>([]);
   const [page, setPage] = useState(1);
@@ -186,20 +187,27 @@ function WorkerPicker({ operation, onAssigned }: { operation: ClaimableOperation
   const [loading, setLoading] = useState(false);
   const [assigningId, setAssigningId] = useState("");
   const [error, setError] = useState("");
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestRef.current += 1;
+    };
+  }, []);
   const loadWorkers = useCallback(async (nextPage: number, mode: "replace" | "append") => {
     const requestId = ++requestRef.current;
     setLoading(true);
     setError("");
     try {
       const result = await workReportRepository.searchWorkers(keyword, nextPage, pageSize);
-      if (requestId !== requestRef.current) return;
+      if (!mountedRef.current || requestId !== requestRef.current) return;
       setWorkers((current) => mode === "append" ? [...current, ...result.items] : result.items);
       setPage(nextPage);
       setHasMore(result.hasMore);
     } catch (err) {
-      if (requestId === requestRef.current) setError(getErrorMessage(err));
+      if (mountedRef.current && requestId === requestRef.current) setError(getErrorMessage(err));
     } finally {
-      if (requestId === requestRef.current) setLoading(false);
+      if (mountedRef.current && requestId === requestRef.current) setLoading(false);
     }
   }, [keyword]);
   useEffect(() => { void loadWorkers(1, "replace"); }, [loadWorkers]);
@@ -216,8 +224,8 @@ function WorkerPicker({ operation, onAssigned }: { operation: ClaimableOperation
     setAssigningId(worker.id);
     setError("");
     try { await onAssigned(worker); }
-    catch (err) { setError(getErrorMessage(err)); }
-    finally { setAssigningId(""); }
+    catch (err) { if (mountedRef.current) setError(getErrorMessage(err)); }
+    finally { if (mountedRef.current) setAssigningId(""); }
   };
   return <div className={cx(styles["worker-picker"])}><div className={cx(styles["worker-picker-head"])}><label className={cx(styles["search-box"], styles["compact"])}><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜姓名、工号、首字母" /></label><span>{operation.operationCode}</span></div><div className={cx(styles["worker-result-list"])}>{workers.map((worker) => <button key={worker.id} disabled={!!assigningId} onClick={() => void assign(worker)}><span className={cx(styles["worker-avatar-mini"])}>{worker.name.slice(0, 1)}</span><div><strong>{worker.name}</strong><small>{worker.employeeNo} · {worker.nameInitials.toUpperCase()} · {worker.teamName}</small></div><em>{worker.activeAssignmentCount} 道</em>{assigningId === worker.id ? <span className="spinner small" /> : <Check />}</button>)}{!workers.length && !loading && <div className={cx(styles["empty-inline"])}>没有找到人员。</div>}<div ref={sentinelRef} className={cx(styles["lazy-load-state"])}>{loading ? "正在加载人员..." : hasMore ? "继续下滑加载更多人员" : "人员已显示完"}</div></div>{error && <div className={cx(styles["admin-message"], styles["danger"])}>{error}</div>}</div>;
 }
@@ -310,7 +318,7 @@ export function AssignmentAdminPage() {
   const [operations, setOperations] = useState<ClaimableOperation[]>([]);
   const [assignTargetId, setAssignTargetId] = useState("");
   const [message, setMessage] = useState("");
-  const loadProducts = useCallback(() => canAssignWorkers ? workReportRepository.searchClaimableProducts(keyword) : Promise.resolve([]), [canAssignWorkers, keyword]);
+  const loadProducts = useCallback(async () => canAssignWorkers ? (await workReportRepository.searchClaimableProducts(keyword, 1, 20)).items : [], [canAssignWorkers, keyword]);
   const { data: products = [], loading: productsLoading, reload } = useAsyncResource(loadProducts);
   const { data: assignments = [], loading: assignmentsLoading, reload: reloadAssignments } = useAsyncResource<OperationAssignment[]>(useCallback(() => workReportRepository.getAssignments(), []));
   const loadParts = async (productId: string) => {

@@ -19,6 +19,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { canAccessAdminRoute, type AdminRouteKey } from "@/domain/work-report";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
+import { createXftSsoUrl } from "@/utils/xft";
 import styles from "./AdminLayout.module.less";
 
 
@@ -47,7 +48,7 @@ function AdminAvatar({ src, name }: { src?: string | null; name: string }) {
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
   const capabilities = useWorkReportStore((state) => state.capabilities);
-  const { name, avatar } = useAuthStore();
+  const { name, avatar, token } = useAuthStore();
   const visibleItems = items.filter(([, routeKey]) => canAccessAdminRoute(capabilities, routeKey as AdminRouteKey));
   const displayName = name?.trim() || "生产管理员";
   return (
@@ -90,7 +91,10 @@ export default function AdminLayout() {
             <BarChart3 />
             <span>实时生产数据</span>
           </div>
-          <a href="/work/claim">打开移动端</a>
+          <div className={styles["topbar-actions"]}>
+            <a href={createXftSsoUrl("", token)}>进入薪福通</a>
+            <a href="/work/claim">打开移动端</a>
+          </div>
         </header>
         <main>
           <Outlet />

@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
-  Box, CalendarClock, Camera, CheckCircle2, ChevronRight, CircleAlert, ClipboardList,
+  Box, CalendarClock, Camera, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, ClipboardList,
   Clock3, FileText, Hash, LogOut, MessageSquareText, PackageCheck, Pause, Play, RefreshCw,
-  RotateCcw, Search, Target, Trash2, UsersRound, X,
+  RotateCcw, Search, Target, Trash2, UsersRound, WalletCards, X,
 } from "lucide-react";
 import { useLogout } from "@/hooks/useLogout";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { canSwitchFromAssignment, canWorkerRemoveAssignment, formatDuration, getSessionElapsedSeconds, statusLabel, type ClaimableOperation, type ClaimablePart, type ClaimableProduct, type OperationAssignment } from "@/domain/work-report";
+import type { PaginatedResult } from "@/api/services/workReport.repository";
 import { createImagePreviews, filesToCompletionPhotos, revokeImagePreviews, selectImageFiles, type ImagePreview } from "@/utils/imageFiles";
 import { getErrorMessage } from "@/utils/errors";
+import { openXft } from "@/utils/xft";
 import { useNavigate } from "react-router-dom";
 import styles from "./MobilePages.module.less";
 
@@ -38,6 +40,7 @@ type OperationListRange = "today" | "7" | "30" | "all";
 const claimOperationFilterOptions: Array<[ClaimOperationFilter, string]> = [["all", "全部"], ["available", "可领取"], ["claimed", "已满"]];
 const claimRecentStatusOptions: Array<[Exclude<ClaimOperationFilter, "claimed">, string]> = [["available", "可领取"], ["all", "全部"]];
 const operationListRangeOptions: Array<[OperationListRange, string]> = [["today", "今天"], ["7", "最近7天"], ["30", "最近一个月"], ["all", "全部"]];
+const claimSearchPageSize = 4;
 const operationListPageSize = 6;
 const requireAuth = import.meta.env.VITE_REQUIRE_AUTH !== "false";
 const getTimeValue = (date?: string) => date ? new Date(date).getTime() : 0;
@@ -214,7 +217,7 @@ export function OperationsPage() {
 
 export function ClaimOperationsPage() {
   const {
-    actionLoading, claimLoading, claimProducts, claimParts, claimOperations, recentClaimOperations, error,
+    actionLoading, claimLoading, claimProducts, claimProductsPagination, claimParts, claimOperations, recentClaimOperations, error,
     searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, clearError,
   } = useWorkReportStore();
   const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
@@ -223,7 +226,7 @@ export function ClaimOperationsPage() {
   return <div className={cx(styles["standard-page"], styles["claim-page"])}>
     <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
-    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
+    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
   </div>;
 }
 
@@ -232,16 +235,17 @@ function OperationCard({ item, removing, onRemove, v1Status = false }: { item: O
 }
 
 function ClaimOperationsPanel({
-  mode = "v2", loading, products, parts, operations, recentOperations = [], claimed, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed,
+  mode = "v2", loading, products, productPagination, parts, operations, recentOperations = [], claimed, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed,
 }: {
   mode?: "v1" | "v2";
   loading: boolean;
   products: ClaimableProduct[];
+  productPagination: PaginatedResult<ClaimableProduct>;
   parts: ClaimablePart[];
   operations: ClaimableOperation[];
   recentOperations?: ClaimableOperation[];
   claimed: OperationAssignment | null;
-  onSearch: (keyword: string) => Promise<void>;
+  onSearch: (keyword: string, page?: number, pageSize?: number) => Promise<void>;
   onLoadRecent?: () => Promise<void>;
   onLoadParts: (productId: string) => Promise<void>;
   onLoadOperations: (partId: string) => Promise<void>;
@@ -257,9 +261,13 @@ function ClaimOperationsPanel({
   const [dismissedAutoPartId, setDismissedAutoPartId] = useState<string | null>(null);
   const [view, setView] = useState<ClaimPanelView>("search");
   const [filter, setFilter] = useState<ClaimOperationFilter>("all");
+  const [searchPage, setSearchPage] = useState(1);
   const [recentDate, setRecentDate] = useState<ClaimRecentDateFilter>("all");
   const [recentStatus, setRecentStatus] = useState<Exclude<ClaimOperationFilter, "claimed">>("available");
+  const productPageCount = Math.max(1, Math.ceil(productPagination.total / productPagination.pageSize));
   const filteredSearchOperations = operations.filter((item) => filter === "all" ? true : item.status === filter);
+  const searchPageCount = Math.max(1, Math.ceil(filteredSearchOperations.length / claimSearchPageSize));
+  const visibleSearchOperations = filteredSearchOperations.slice((searchPage - 1) * claimSearchPageSize, searchPage * claimSearchPageSize);
   const filteredRecentOperations = recentOperations.filter((item) => {
     const matchesDate = recentDate === "all" ? true : isSameLocalDay(item.plannedStart);
     const matchesStatus = recentStatus === "all" ? true : item.status === "available";
@@ -270,10 +278,23 @@ function ClaimOperationsPanel({
     setSelectedPart(null);
     setDismissedAutoProductId(null);
     setDismissedAutoPartId(null);
-    await onSearch(keyword);
+    setSearchPage(1);
+    await onSearch(keyword, 1, productPagination.pageSize);
   };
+  const loadProductPage = async (page: number) => {
+    setSelectedProduct(null);
+    setSelectedPart(null);
+    setDismissedAutoProductId(null);
+    setDismissedAutoPartId(null);
+    setSearchPage(1);
+    await onSearch(keyword, page, productPagination.pageSize);
+  };
+  useEffect(() => { setSearchPage(1); }, [filter, selectedPart?.id]);
   useEffect(() => {
-    if (view !== "search" || selectedProduct || products.length !== 1) return;
+    if (searchPage > searchPageCount) setSearchPage(searchPageCount);
+  }, [searchPage, searchPageCount]);
+  useEffect(() => {
+    if (view !== "search" || selectedProduct || productPagination.total !== 1 || products.length !== 1) return;
     const [product] = products;
     if (!product || dismissedAutoProductId === product.id) return;
 
@@ -281,13 +302,14 @@ function ClaimOperationsPanel({
     setSelectedPart(null);
     setDismissedAutoPartId(null);
     void onLoadParts(product.id);
-  }, [dismissedAutoProductId, onLoadParts, products, selectedProduct, view]);
+  }, [dismissedAutoProductId, onLoadParts, productPagination.total, products, selectedProduct, view]);
   useEffect(() => {
     if (view !== "search" || !selectedProduct || selectedPart || parts.length !== 1) return;
     const [part] = parts;
     if (!part || dismissedAutoPartId === part.id) return;
 
     setSelectedPart(part);
+    setSearchPage(1);
     void onLoadOperations(part.id);
   }, [dismissedAutoPartId, onLoadOperations, parts, selectedPart, selectedProduct, view]);
   const loadRecent = async () => { await onLoadRecent?.(); };
@@ -299,12 +321,12 @@ function ClaimOperationsPanel({
     {view === "search" && <section className={cx(styles["claim-workspace"], styles["claim-search-workspace"])} aria-label="搜索结果">
       <div className={styles["section-heading"]}><div><h2>搜索结果</h2><p>按产品、部件、工序逐级选择。</p></div></div>
       <label className={styles["claim-search"]}><Search /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入产品编号搜索" /><button disabled={loading || !keyword.trim()} onClick={() => void search()}>搜索</button></label>
-      <div className={styles["claim-filter"]} aria-label="领取状态筛选">{claimOperationFilterOptions.map(([key, label]) => <button key={key} className={filter === key ? styles.active : undefined} onClick={() => setFilter(key)}>{label}</button>)}</div>
+      <div className={styles["claim-filter"]} aria-label="领取状态筛选">{claimOperationFilterOptions.map(([key, label]) => <button key={key} className={filter === key ? styles.active : undefined} onClick={() => { setFilter(key); setSearchPage(1); }}>{label}</button>)}</div>
       <div className={styles["claim-columns"]}>
-        <div><h3>1 产品编号</h3>{selectedProduct ? <button key={selectedProduct.id} className={styles.selected} onClick={() => { setDismissedAutoProductId(selectedProduct.id); setSelectedProduct(null); setSelectedPart(null); }}><strong>{selectedProduct.productCode}</strong><span>{selectedProduct.productName}</span><small>{selectedProduct.orderNo} · 剩余 {selectedProduct.remainingQuantity} 件</small><span className={styles["cancel-select"]}>点击取消选择</span></button> : products.map((item) => <button key={item.id} onClick={() => { setSelectedProduct(item); setSelectedPart(null); setDismissedAutoPartId(null); void onLoadParts(item.id); }}><strong>{item.productCode}</strong><span>{item.productName}</span><small>{item.orderNo} · 剩余 {item.remainingQuantity} 件</small></button>)}</div>
-        <div><h3>2 部件编号</h3>{selectedPart ? <button key={selectedPart.id} className={styles.selected} onClick={() => { setDismissedAutoPartId(selectedPart.id); setSelectedPart(null); }}><strong>{selectedPart.partCode}</strong><span>{selectedPart.partNo && `[${selectedPart.partNo}] `}{selectedPart.partName}</span><small>{selectedPart.operationCount} 道工序 · 剩余 {selectedPart.remainingQuantity} 件</small><span className={styles["cancel-select"]}>点击取消选择</span></button> : parts.map((item) => <button key={item.id} onClick={() => { setSelectedPart(item); void onLoadOperations(item.id); }}><strong>{item.partCode}</strong><span>{item.partNo && `[${item.partNo}] `}{item.partName}</span><small>{item.operationCount} 道工序 · 剩余 {item.remainingQuantity} 件</small></button>)}</div>
+        <div><div className={styles["claim-list-title"]}><h3>1 产品编号</h3>{!selectedProduct && productPagination.total > 0 && <span>共 {productPagination.total} 个</span>}</div>{selectedProduct ? <button key={selectedProduct.id} className={styles.selected} onClick={() => { setDismissedAutoProductId(selectedProduct.id); setSelectedProduct(null); setSelectedPart(null); setSearchPage(1); }}><strong>{selectedProduct.productCode}</strong><span>{selectedProduct.productName}</span><small>{selectedProduct.orderNo} · 剩余 {selectedProduct.remainingQuantity} 件</small><span className={styles["cancel-select"]}>点击取消选择</span></button> : products.map((item) => <button key={item.id} onClick={() => { setSelectedProduct(item); setSelectedPart(null); setSearchPage(1); setDismissedAutoPartId(null); void onLoadParts(item.id); }}><strong>{item.productCode}</strong><span>{item.productName}</span><small>{item.orderNo} · 剩余 {item.remainingQuantity} 件</small></button>)}{!selectedProduct && productPagination.total > productPagination.pageSize && <div className={styles["claim-pagination"]} aria-label="产品搜索分页"><button disabled={loading || productPagination.page <= 1} onClick={() => void loadProductPage(Math.max(1, productPagination.page - 1))} aria-label="上一页"><ChevronLeft />上一页</button><span>第 {productPagination.page} / {productPageCount} 页</span><button disabled={loading || !productPagination.hasMore} onClick={() => void loadProductPage(Math.min(productPageCount, productPagination.page + 1))} aria-label="下一页">下一页<ChevronRight /></button></div>}</div>
+        <div><h3>2 部件编号</h3>{selectedPart ? <button key={selectedPart.id} className={styles.selected} onClick={() => { setDismissedAutoPartId(selectedPart.id); setSelectedPart(null); setSearchPage(1); }}><strong>{selectedPart.partCode}</strong><span>{selectedPart.partNo && `[${selectedPart.partNo}] `}{selectedPart.partName}</span><small>{selectedPart.operationCount} 道工序 · 剩余 {selectedPart.remainingQuantity} 件</small><span className={styles["cancel-select"]}>点击取消选择</span></button> : parts.map((item) => <button key={item.id} onClick={() => { setSelectedPart(item); setSearchPage(1); void onLoadOperations(item.id); }}><strong>{item.partCode}</strong><span>{item.partNo && `[${item.partNo}] `}{item.partName}</span><small>{item.operationCount} 道工序 · 剩余 {item.remainingQuantity} 件</small></button>)}</div>
       </div>
-      <div className={styles["claim-operation-list"]} aria-label="搜索工序结果"><h3>3 工序</h3>{selectedPart ? filteredSearchOperations.map(renderOperation) : <div className={styles["empty-inline"]}>请先搜索并选择部件查看工序。</div>}{selectedPart && !filteredSearchOperations.length && <div className={styles["empty-inline"]}>当前筛选下暂无工序</div>}</div>
+      <div className={styles["claim-operation-list"]} aria-label="搜索工序结果"><div className={styles["claim-list-title"]}><h3>3 工序</h3>{selectedPart && filteredSearchOperations.length > 0 && <span>共 {filteredSearchOperations.length} 道</span>}</div>{selectedPart ? visibleSearchOperations.map(renderOperation) : <div className={styles["empty-inline"]}>请先搜索并选择部件查看工序。</div>}{selectedPart && !filteredSearchOperations.length && <div className={styles["empty-inline"]}>当前筛选下暂无工序</div>}{selectedPart && filteredSearchOperations.length > claimSearchPageSize && <div className={styles["claim-pagination"]} aria-label="工序搜索分页"><button disabled={loading || searchPage <= 1} onClick={() => setSearchPage((page) => Math.max(1, page - 1))} aria-label="上一页"><ChevronLeft />上一页</button><span>第 {searchPage} / {searchPageCount} 页</span><button disabled={loading || searchPage >= searchPageCount} onClick={() => setSearchPage((page) => Math.min(searchPageCount, page + 1))} aria-label="下一页">下一页<ChevronRight /></button></div>}</div>
     </section>}
     {view === "recent" && <section className={cx(styles["claim-workspace"], styles["claim-recent-workspace"])} aria-label="最近可以领取的工序">
       <div className={styles["section-heading"]}><div><h2>最近可以领取的工序</h2><p>不影响上方搜索结果。</p></div><button className={styles["ghost-button"]} disabled={loading} onClick={() => void loadRecent()}><RefreshCw />刷新</button></div>
@@ -330,8 +352,8 @@ function PageHeader({ title, subtitle }: { title: string; subtitle: string }) { 
 
 export function ProfilePage() {
   const logout = useLogout();
-  const { name, userId, avatar } = useAuthStore();
+  const { name, userId, avatar, token } = useAuthStore();
   const displayName = name?.trim() || (requireAuth ? "未提供姓名" : "张师傅");
   const displayUserId = userId?.trim() || (requireAuth ? "未提供工号" : "EMP-20240018");
-  return <div className={cx(styles["standard-page"], styles["profile-page"])}><PageHeader title="我的" subtitle={requireAuth ? "企业微信登录信息" : "个人信息与演示设置"} /><section className={styles["profile-card"]}><AvatarCircle className={styles["profile-avatar"]} src={avatar} name={displayName} /><div><h2>{displayName}</h2><p>{requireAuth ? "企业微信已验证" : "生产一组 · 白班"}</p></div></section><section className={styles["profile-menu"]}><button><UsersRound /><span><strong>工号</strong><small>{displayUserId}</small></span></button>{requireAuth ? <button><CheckCircle2 /><span><strong>登录状态</strong><small>已验证</small></span></button> : <button><CalendarClock /><span><strong>当前班次</strong><small>08:00 - 20:00</small></span></button>}</section><button className={styles["logout-action"]} onClick={logout}><LogOut />退出登录</button></div>;
+  return <div className={cx(styles["standard-page"], styles["profile-page"])}><PageHeader title="我的" subtitle={requireAuth ? "企业微信登录信息" : "个人信息与演示设置"} /><section className={styles["profile-card"]}><AvatarCircle className={styles["profile-avatar"]} src={avatar} name={displayName} /><div><h2>{displayName}</h2><p>{requireAuth ? "企业微信已验证" : "生产一组 · 白班"}</p></div></section><section className={styles["profile-menu"]}><button><UsersRound /><span><strong>工号</strong><small>{displayUserId}</small></span></button>{requireAuth ? <button><CheckCircle2 /><span><strong>登录状态</strong><small>已验证</small></span></button> : <button><CalendarClock /><span><strong>当前班次</strong><small>08:00 - 20:00</small></span></button>}<button onClick={() => openXft("", token)}><WalletCards /><span><strong>进入薪福通</strong><small>打开薪福通工作台</small></span></button></section><button className={styles["logout-action"]} onClick={logout}><LogOut />退出登录</button></div>;
 }

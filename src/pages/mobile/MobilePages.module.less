@@ -454,6 +454,12 @@
 
 .claim-columns > div,.claim-operation-list { display: grid; gap: 9px; }
 
+.claim-list-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.claim-list-title h3 { margin-bottom: 0; }
+
+.claim-list-title span { color: var(--muted); font-size: 13px; font-weight: 800; white-space: nowrap; }
+
 .claim-columns button { display: grid; width: 100%; gap: 4px; border: 1px solid #dde5ef; border-radius: 13px; padding: 14px;
   color: var(--ink);
   background: #fff; text-align: left; }
@@ -496,6 +502,20 @@
 .claim-operation-list dt,.recent-operation-list dt { color: var(--muted); font-size: 12px; }
 
 .claim-operation-list dd,.recent-operation-list dd { margin: 3px 0 0; font-weight: 800; }
+
+.claim-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; border: 1px solid #dfe7f1; border-radius: 12px; padding: 8px;
+  background: #fff; }
+
+.claim-pagination button { display: flex; min-height: 40px; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: 9px; padding: 8px 10px;
+  color: var(--blue-700);
+  background: var(--blue-50); font-size: 14px; font-weight: 800; }
+
+.claim-pagination button:disabled { color: #98a2b3;
+  background: #f2f4f7; }
+
+.claim-pagination svg { width: 16px; height: 16px; }
+
+.claim-pagination span { color: var(--muted); font-size: 13px; font-weight: 800; white-space: nowrap; }
 
 .recent-operation-list { display: grid; gap: 10px; }
 

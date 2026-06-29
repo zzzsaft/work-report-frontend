@@ -7,16 +7,21 @@ import { LoginPage } from "./LoginPage";
 export function AuthGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
   const checkedToken = useRef<string | null>(null);
+  const mountedRef = useRef(true);
   const requestId = useRef(0);
   const [authChecked, setAuthChecked] = useState(false);
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const { token, isAuthenticated, isLoading, checkAuth } = useAuthStore();
 
   useEffect(() => {
+    mountedRef.current = true;
+
     if (isAuthenticated) {
       setAuthChecked(true);
       setShowLoginPanel(false);
-      return;
+      return () => {
+        mountedRef.current = false;
+      };
     }
 
     if (!token) {
@@ -24,10 +29,16 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       checkedToken.current = null;
       setAuthChecked(false);
       setShowLoginPanel(true);
-      return;
+      return () => {
+        mountedRef.current = false;
+      };
     }
 
-    if (checkedToken.current === token) return;
+    if (checkedToken.current === token) {
+      return () => {
+        mountedRef.current = false;
+      };
+    }
     checkedToken.current = token;
     const request = ++requestId.current;
     setAuthChecked(false);
@@ -35,15 +46,19 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
     const authenticate = async () => {
       if (await checkAuth()) {
-        if (request !== requestId.current) return;
+        if (!mountedRef.current || request !== requestId.current) return;
         setAuthChecked(true);
         return;
       }
 
-      if (request === requestId.current) setShowLoginPanel(true);
+      if (mountedRef.current && request === requestId.current) setShowLoginPanel(true);
     };
 
     void authenticate();
+
+    return () => {
+      mountedRef.current = false;
+    };
   }, [checkAuth, isAuthenticated, location.hash, location.pathname, location.search, token]);
 
   if (showLoginPanel) {

@@ -29,4 +29,10 @@ describe("real work report repository", () => {
     vi.spyOn(workReportClient, "get").mockResolvedValue({ data: { items: [order("2")], hasMore: false } });
     await expect(realWorkReportRepository.getOrders()).resolves.toEqual([order("2")]);
   });
+
+  it("requests claimable products with pagination params", async () => {
+    const get = vi.spyOn(workReportClient, "get").mockResolvedValue({ data: { items: [], page: 2, pageSize: 4, total: 0, hasMore: false } });
+    await expect(realWorkReportRepository.searchClaimableProducts("CP-1", 2, 4)).resolves.toMatchObject({ items: [], page: 2, pageSize: 4 });
+    expect(get).toHaveBeenCalledWith("/claim/products", { params: { keyword: "CP-1", page: 2, pageSize: 4 } });
+  });
 });

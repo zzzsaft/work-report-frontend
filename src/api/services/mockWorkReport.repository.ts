@@ -396,11 +396,12 @@ export const mockWorkReportRepository: WorkReportRepository = {
       return { ...item, status: "completed", canWorkerRemove: false, session: { ...item.session, status: "completed", accumulatedSeconds: elapsed, currentRunStartedAt: undefined, completedAt: nowIso(), photos: input.photos.map((photo, index) => ({ id: `photo-${Date.now()}-${index}`, ...photo, uploadedAt: nowIso() })), completedQuantity: input.completedQuantity, note: input.note } };
     });
   },
-  async searchClaimableProducts(keyword) {
+  async searchClaimableProducts(keyword, page, pageSize) {
     await delay();
     const key = keyword?.trim().toLowerCase();
-    if (!key) return load().claimProducts;
-    return load().claimProducts.filter((item) => `${item.productCode}${item.productName}${item.orderNo}`.toLowerCase().includes(key));
+    const products = !key ? load().claimProducts : load().claimProducts.filter((item) => `${item.productCode}${item.productName}${item.orderNo}`.toLowerCase().includes(key));
+    const start = (page - 1) * pageSize;
+    return { items: products.slice(start, start + pageSize), page, pageSize, total: products.length, hasMore: start + pageSize < products.length };
   },
   async getClaimableParts(productId) { await delay(); return sortByNumericCode(load().claimParts.filter((item) => item.productId === productId), (item) => item.partNo); },
   async getClaimableOperations(partId) { await delay(); return sortByNumericCode(load().claimOperations.filter((item) => item.partId === partId), (item) => item.operationNo); },

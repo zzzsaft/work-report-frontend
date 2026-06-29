@@ -129,7 +129,7 @@ describe("work report request state", () => {
       status: "available",
     };
 
-    workReportRepository.searchClaimableProducts = async () => products;
+    workReportRepository.searchClaimableProducts = async () => ({ items: products, page: 1, pageSize: 6, total: products.length, hasMore: false });
     workReportRepository.getClaimableParts = async (productId) => productId === "product-7" ? [part] : [];
     workReportRepository.getClaimableOperations = async (partId) => partId === "part-7" ? [operation] : [];
 

@@ -26,8 +26,11 @@ export const parseLoginState = (state: string | null) => {
 
   try {
     const parsed = JSON.parse(state) as { redirect?: unknown };
-    const redirect = typeof parsed.redirect === "string" ? parsed.redirect : "/";
-    return redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
+    const redirect =
+      typeof parsed.redirect === "string" ? parsed.redirect : "/";
+    return redirect.startsWith("/") && !redirect.startsWith("//")
+      ? redirect
+      : "/";
   } catch {
     return "/";
   }
@@ -46,7 +49,7 @@ export const createWeComOAuthUrl = ({
     appid: corpId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "snsapi_base",
+    scope: "snsapi_privateinfo",
     state,
     agentid: agentId,
   });
