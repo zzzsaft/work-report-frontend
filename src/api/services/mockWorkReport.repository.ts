@@ -143,23 +143,11 @@ const baseAssignment = (status: "assigned" | "running" | "paused" = "running"): 
   };
 };
 
-const claimProducts: ClaimableProduct[] = [
-  { id: "claim-product-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", remainingQuantity: 46 },
-  { id: "claim-product-002", orderNo: "WO-20260623-021", productCode: "CP-FL-240623-02", productName: "连接法兰", remainingQuantity: 52 },
-];
+const claimProducts: ClaimableProduct[] = [];
 
-const claimParts: ClaimablePart[] = [
-  { id: "part-001", productId: "claim-product-001", partCode: "PART-CASE-001", partName: "壳体主件", operationCount: 3, remainingQuantity: 46 },
-  { id: "part-002", productId: "claim-product-001", partCode: "PART-COVER-002", partName: "端盖", operationCount: 2, remainingQuantity: 28 },
-  { id: "part-003", productId: "claim-product-002", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCount: 2, remainingQuantity: 52 },
-];
+const claimParts: ClaimablePart[] = [];
 
-const claimOperations: ClaimableOperation[] = [
-  { id: "pool-op-001", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-060", operationName: "终检前倒角", operationNote: "重点检查窗口边、孔口倒角，完成后流转终检。", plannedQuantity: 40, plannedStart: todayStart(10), estimatedHours: 2.5, claimedWorkers: 1, maxClaimWorkers: 2, status: "available" },
-  { id: "pool-op-002", productId: "claim-product-001", partId: "part-001", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-070", operationName: "清洗包装", operationNote: "清洗后擦干，按周转箱标签摆放。", plannedQuantity: 40, plannedStart: todayStart(15), estimatedHours: 1.5, claimedWorkers: 0, status: "available" },
-  { id: "pool-op-003", productId: "claim-product-001", partId: "part-002", orderNo: "WO-20260623-018", productCode: "CP-JSJ-240623-07", productName: "减速机外壳", partCode: "PART-COVER-002", partName: "端盖", operationCode: "OP-020", operationName: "端盖钻孔", operationNote: "孔位按图纸 A2 面基准，首件需复核。", plannedQuantity: 28, plannedStart: todayStart(13), estimatedHours: 2, claimedWorkers: 0, status: "available" },
-  { id: "pool-op-004", productId: "claim-product-002", partId: "part-003", orderNo: "WO-20260623-021", productCode: "CP-FL-240623-02", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-030", operationName: "法兰攻丝", operationNote: "M10 丝孔，攻丝后吹净铁屑。", plannedQuantity: 52, plannedStart: "2026-06-24T09:00:00+08:00", estimatedHours: 3, claimedWorkers: 2, maxClaimWorkers: 2, status: "claimed" },
-];
+const claimOperations: ClaimableOperation[] = [];
 
 const completedAssignment = (id: string, daysAgo: number, operationCode: string, operationName: string, productCode: string, productName: string): OperationAssignment => {
   const date = new Date(new Date("2026-06-23T08:00:00+08:00").getTime() - daysAgo * 24 * 3600_000);
@@ -274,8 +262,10 @@ const createAssignmentFromPool = (operation: ClaimableOperation, source: Operati
   orderNo: operation.orderNo,
   productCode: operation.productCode,
   productName: operation.productName,
+  partNo: operation.partNo,
   partCode: operation.partCode,
   partName: operation.partName,
+  operationNo: operation.operationNo,
   operationCode: operation.operationCode,
   operationName: operation.operationName,
   operationNote: operation.operationNote,
@@ -335,12 +325,12 @@ export const mockWorkReportRepository: WorkReportRepository = {
   },
   async searchClaimableProducts(keyword) {
     await delay();
-    const key = keyword.trim().toLowerCase();
+    const key = keyword?.trim().toLowerCase();
     if (!key) return load().claimProducts;
     return load().claimProducts.filter((item) => `${item.productCode}${item.productName}${item.orderNo}`.toLowerCase().includes(key));
   },
-  async getClaimableParts(productId) { await delay(); return load().claimParts.filter((item) => item.productId === productId); },
-  async getClaimableOperations(partId) { await delay(); return load().claimOperations.filter((item) => item.partId === partId); },
+  async getClaimableParts(productId) { await delay(); return load().claimParts.filter((item) => item.productId === productId).sort((a, b) => Number(a.partNo || 0) - Number(b.partNo || 0)); },
+  async getClaimableOperations(partId) { await delay(); return load().claimOperations.filter((item) => item.partId === partId).sort((a, b) => Number(a.operationNo || 0) - Number(b.operationNo || 0)); },
   async claimOperation(operationId) {
     await delay();
     const db = load();
@@ -424,10 +414,10 @@ export const mockWorkReportRepository: WorkReportRepository = {
     rows.forEach((row, index) => {
       const product = db.claimProducts.find((item) => item.productCode === row.productCode) || { id: `claim-product-import-${Date.now()}-${index}`, orderNo: `LEADER-${row.productCode}`, productCode: row.productCode, productName: row.productCode, remainingQuantity: row.quantity };
       if (!db.claimProducts.some((item) => item.id === product.id)) db.claimProducts.push(product);
-      const part = db.claimParts.find((item) => item.productId === product.id && item.partCode === row.partCode) || { id: `part-import-${Date.now()}-${index}`, productId: product.id, partCode: row.partCode, partName: row.partCode, operationCount: 0, remainingQuantity: row.quantity };
+      const part = db.claimParts.find((item) => item.productId === product.id && item.partCode === row.partCode) || { id: `part-import-${Date.now()}-${index}`, productId: product.id, partNo: "", partCode: row.partCode, partName: row.partCode, operationCount: 0, remainingQuantity: row.quantity };
       if (!db.claimParts.some((item) => item.id === part.id)) db.claimParts.push(part);
       part.operationCount += 1;
-      db.claimOperations.push({ id: `pool-op-import-${Date.now()}-${index}`, productId: product.id, partId: part.id, orderNo: product.orderNo, productCode: product.productCode, productName: product.productName, partCode: part.partCode, partName: part.partName, operationCode: row.operationCode, operationName: row.operationName, operationNote: "小组长导入工序，请按现场工艺要求执行。", plannedQuantity: row.quantity, plannedStart: todayStart(9), estimatedHours: row.estimatedHours, claimedWorkers: 0, status: "available" });
+      db.claimOperations.push({ id: `pool-op-import-${Date.now()}-${index}`, productId: product.id, partId: part.id, orderNo: product.orderNo, productCode: product.productCode, productName: product.productName, partCode: part.partCode, partName: part.partName, operationNo: "", operationCode: row.operationCode, operationName: row.operationName, operationNote: "小组长导入工序，请按现场工艺要求执行。", plannedQuantity: row.quantity, plannedStart: todayStart(9), estimatedHours: row.estimatedHours, claimedWorkers: 0, status: "available" });
     });
     save(db);
     return { accepted: rows.length, rejected: 0, errors: [] };

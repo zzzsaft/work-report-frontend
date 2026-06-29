@@ -55,8 +55,10 @@ export interface OperationAssignment {
   orderNo: string;
   productCode: string;
   productName: string;
+  partNo?: string;
   partCode: string;
   partName?: string;
+  operationNo?: string;
   operationCode: string;
   operationName: string;
   operationNote: string;
@@ -128,6 +130,7 @@ export interface ClaimableProduct {
 export interface ClaimablePart {
   id: string;
   productId: string;
+  partNo: string;
   partCode: string;
   partName: string;
   operationCount: number;
@@ -143,6 +146,7 @@ export interface ClaimableOperation {
   productName: string;
   partCode: string;
   partName: string;
+  operationNo: string;
   operationCode: string;
   operationName: string;
   operationNote: string;

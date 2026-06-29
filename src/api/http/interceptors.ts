@@ -9,9 +9,16 @@ const getStoredToken = () => {
   }
 };
 
+const getMockToken = () => {
+  const requireAuth = import.meta.env.VITE_REQUIRE_AUTH !== "false";
+  if (requireAuth) return "";
+  return import.meta.env.VITE_MOCK_AUTH_TOKEN || "mock-token";
+};
+
 export const setupAuthInterceptors = (instance: AxiosInstance) => {
   instance.interceptors.request.use((config) => {
-    const token = getStoredToken();
+    const requireAuth = import.meta.env.VITE_REQUIRE_AUTH !== "false";
+    const token = requireAuth ? getStoredToken() : (getMockToken() || getStoredToken());
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
