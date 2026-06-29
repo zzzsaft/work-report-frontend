@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import styles from "./AuthShared.module.less";
 import {
   createLoginState,
+  createWeComOAuthUrl,
   isWeComBrowser,
   mountWeComLoginPanel,
 } from "@/utils/wecom";
@@ -17,9 +19,29 @@ export function WeComLoginPanel({
   const isAutoLogin = isWeComBrowser();
 
   useEffect(() => {
+    const state = createLoginState(redirect);
+
+    if (isAutoLogin) {
+      try {
+        window.location.replace(
+          createWeComOAuthUrl({
+            state,
+            redirectUri: `${window.location.origin}/auth-callback`,
+          })
+        );
+      } catch (redirectError) {
+        setError(
+          redirectError instanceof Error
+            ? redirectError.message
+            : "企业微信登录跳转失败"
+        );
+      }
+
+      return;
+    }
+
     if (!panelElement.current) return;
 
-    const state = createLoginState(redirect);
     let panel: ReturnType<typeof mountWeComLoginPanel> | undefined;
 
     try {
@@ -46,17 +68,17 @@ export function WeComLoginPanel({
     }
 
     return () => panel?.unmount();
-  }, [redirect]);
+  }, [isAutoLogin, redirect]);
 
   return (
-    <main className="wecom-login-page">
-      <section className="wecom-login-card">
+    <main className={styles["wecom-login-page"]}>
+      <section className={styles["wecom-login-card"]}>
         <h1>企业微信登录</h1>
         <p>{isAutoLogin ? "正在打开企业微信登录..." : "请在下方登录面板中完成身份验证"}</p>
-        <div className="wecom-panel" ref={panelElement} />
-        {error && <div className="wecom-panel-error">{error}</div>}
+        {!isAutoLogin && <div className={styles["wecom-panel"]} ref={panelElement} />}
+        {error && <div className={styles["wecom-panel-error"]}>{error}</div>}
         {onBack && (
-          <button className="login-secondary-button" type="button" onClick={onBack}>
+          <button className={styles["login-secondary-button"]} type="button" onClick={onBack}>
             返回账号密码登录
           </button>
         )}

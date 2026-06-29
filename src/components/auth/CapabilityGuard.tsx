@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom";
 import { canAccessAdminRoute, type AdminRouteKey } from "@/domain/work-report";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { LoadingScreen } from "./LoadingScreen";
+import styles from "./CapabilityGuard.module.less";
 
 const adminRouteOrder: AdminRouteKey[] = ["dashboard", "orders", "import", "assignments", "reports", "people", "permissions", "accounts", "exceptions", "settings"];
 
@@ -14,12 +15,12 @@ function NoAdminPermission({ message }: { message: string }) {
   const capabilities = useWorkReportStore((state) => state.capabilities);
   const adminHome = getAdminHome(capabilities);
   return (
-    <div className="empty-state">
+    <div className={styles.emptyState}>
       <h1>无权访问管理后台</h1>
       <p>{message}</p>
-      <div className="empty-actions">
-        {adminHome && <Link className="primary-button" to={`/admin/${adminHome}`}>返回可访问后台首页</Link>}
-        <Link className="ghost-button" to="/work/claim">打开移动端</Link>
+      <div className={styles.emptyActions}>
+        {adminHome && <Link className={styles.primaryButton} to={`/admin/${adminHome}`}>返回可访问后台首页</Link>}
+        <Link className={styles.ghostButton} to="/work/claim">打开移动端</Link>
       </div>
     </div>
   );
@@ -42,10 +43,10 @@ export function CapabilityGuard({ children }: { children: ReactNode }) {
   if (!capabilities?.canViewAdmin) {
     if (error) {
       return (
-        <div className="empty-state">
+        <div className={styles.emptyState}>
           <h1>无权访问管理后台</h1>
           <p>{error}</p>
-          <button className="primary-button" onClick={() => void loadCapabilities({ force: true })}>重试</button>
+          <button className={styles.primaryButton} onClick={() => void loadCapabilities({ force: true })}>重试</button>
         </div>
       );
     }

@@ -33,6 +33,27 @@ export const parseLoginState = (state: string | null) => {
   }
 };
 
+export const createWeComOAuthUrl = ({
+  state,
+  redirectUri,
+}: {
+  state: string;
+  redirectUri: string;
+}) => {
+  assertWeComConfig();
+
+  const params = new URLSearchParams({
+    appid: corpId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "snsapi_base",
+    state,
+    agentid: agentId,
+  });
+
+  return `https://open.weixin.qq.com/connect/oauth2/authorize?${params.toString()}#wechat_redirect`;
+};
+
 interface WeComLoginPanelOptions {
   element: Element;
   state: string;

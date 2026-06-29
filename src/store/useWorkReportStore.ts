@@ -58,6 +58,24 @@ const emptyWorkReportState = {
   dayCompleted: false,
 };
 
+const recentClaimProductBatchSize = 6;
+const recentClaimOperationLimit = 12;
+
+const loadRecentClaimableOperations = async () => {
+  const products = await workReportRepository.searchClaimableProducts("");
+  const operations: ClaimableOperation[] = [];
+
+  for (let start = 0; start < products.length && operations.length < recentClaimOperationLimit; start += recentClaimProductBatchSize) {
+    const productBatch = products.slice(start, start + recentClaimProductBatchSize);
+    const partsByProduct = await Promise.all(productBatch.map((product) => workReportRepository.getClaimableParts(product.id)));
+    const parts = partsByProduct.flat();
+    const operationsByPart = await Promise.all(parts.map((part) => workReportRepository.getClaimableOperations(part.id)));
+    operations.push(...operationsByPart.flat());
+  }
+
+  return operations.slice(0, recentClaimOperationLimit);
+};
+
 export const useWorkReportStore = create<WorkReportState>((set, get) => {
   let currentRequest = 0;
   let assignmentsRequest = 0;
@@ -141,11 +159,7 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
     loadRecentClaimableOperations: async () => {
       set({ claimLoading: true, error: null });
       try {
-        const products = await workReportRepository.searchClaimableProducts("");
-        const partsByProduct = await Promise.all(products.slice(0, 6).map((product) => workReportRepository.getClaimableParts(product.id)));
-        const parts = partsByProduct.flat();
-        const operationsByPart = await Promise.all(parts.map((part) => workReportRepository.getClaimableOperations(part.id)));
-        set({ recentClaimOperations: operationsByPart.flat().slice(0, 12) });
+        set({ recentClaimOperations: await loadRecentClaimableOperations() });
       } catch (error) { set({ error: getErrorMessage(error) }); }
       finally { set({ claimLoading: false }); }
     },

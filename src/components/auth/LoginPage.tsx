@@ -8,9 +8,7 @@ import { WeComLoginPanel } from "./WeComLoginPanel";
 
 export function LoginPage({ redirect }: { redirect: string }) {
   const autoWeComLogin = useMemo(() => isWeComBrowser(), []);
-  const [loginMode, setLoginMode] = useState<"password" | "wecom">(
-    autoWeComLogin ? "wecom" : "password",
-  );
+  const [loginMode, setLoginMode] = useState<"password" | "wecom">("wecom");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");

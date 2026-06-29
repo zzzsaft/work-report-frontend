@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LoadingScreen } from "@/components/auth/LoadingScreen";
+import styles from "@/components/auth/AuthShared.module.less";
 import { useAuthStore } from "@/store/useAuthStore";
 import { describeAuthError, type AuthErrorDetails } from "@/utils/authError";
 import { parseLoginState } from "@/utils/wecom";
@@ -40,12 +41,12 @@ export default function AuthCallback() {
 
   if (error) {
     return (
-      <main className="error-screen">
-        <section className="login-error-card" aria-labelledby="login-error-title">
-          <p className="error-label">身份验证失败</p>
+      <main className={styles["error-screen"]}>
+        <section className={styles["login-error-card"]} aria-labelledby="login-error-title">
+          <p className={styles["error-label"]}>身份验证失败</p>
           <h1 id="login-error-title">无法登录</h1>
 
-          <dl className="error-details">
+          <dl className={styles["error-details"]}>
             <div>
               <dt>失败原因</dt>
               <dd>{error.reason}</dd>
@@ -76,7 +77,7 @@ export default function AuthCallback() {
             )}
           </dl>
 
-          <p className="error-help">重试后仍失败，请将以上信息提供给管理员。</p>
+          <p className={styles["error-help"]}>重试后仍失败，请将以上信息提供给管理员。</p>
           <a href="/">重新登录</a>
         </section>
       </main>

@@ -17,7 +17,10 @@ import {
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { canAccessAdminRoute, type AdminRouteKey } from "@/domain/work-report";
+import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
+import styles from "./AdminLayout.module.less";
+
 
 const items = [
   ["/admin/dashboard", "dashboard", "生产总览", Gauge],
@@ -32,15 +35,26 @@ const items = [
   ["/admin/settings", "settings", "系统设置", Settings],
 ] as const;
 
+function AdminAvatar({ src, name }: { src?: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const avatarText = Array.from(name)[0] || "管";
+  if (src && !failed) {
+    return <img className={styles["admin-avatar"]} src={src} alt={name} onError={() => setFailed(true)} />;
+  }
+  return <span className={styles["admin-avatar"]}>{avatarText}</span>;
+}
+
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
   const capabilities = useWorkReportStore((state) => state.capabilities);
+  const { name, avatar } = useAuthStore();
   const visibleItems = items.filter(([, routeKey]) => canAccessAdminRoute(capabilities, routeKey as AdminRouteKey));
+  const displayName = name?.trim() || "生产管理员";
   return (
-    <div className="admin-shell">
-      <aside className={open ? "open" : ""}>
+    <div className={styles["admin-shell"]}>
+      <aside className={open ? styles.open : undefined}>
         <header>
-          <div className="brand-mark">
+          <div className={styles["brand-mark"]}>
             <Wrench />
           </div>
           <div>
@@ -53,23 +67,23 @@ export default function AdminLayout() {
         </header>
         <nav>
           {visibleItems.map(([to, , label, Icon]) => (
-            <NavLink key={to} to={to} onClick={() => setOpen(false)}>
+            <NavLink key={to} to={to} className={({ isActive }) => isActive ? styles.active : undefined} onClick={() => setOpen(false)}>
               <Icon />
               {label}
             </NavLink>
           ))}
         </nav>
         <footer>
-          <span className="admin-avatar">管</span>
+          <AdminAvatar src={avatar} name={displayName} />
           <div>
-            <strong>生产管理员</strong>
+            <strong>{displayName}</strong>
             <small>管理员</small>
           </div>
         </footer>
       </aside>
-      <div className="admin-content">
-        <header className="admin-topbar">
-          <button className="menu-button" onClick={() => setOpen(true)}>
+      <div className={styles["admin-content"]}>
+        <header className={styles["admin-topbar"]}>
+          <button className={styles["menu-button"]} onClick={() => setOpen(true)}>
             <Menu />
           </button>
           <div>
@@ -82,7 +96,7 @@ export default function AdminLayout() {
           <Outlet />
         </main>
       </div>
-      {open && <div className="admin-overlay" onClick={() => setOpen(false)} />}
+      {open && <div className={styles["admin-overlay"]} onClick={() => setOpen(false)} />}
     </div>
   );
 }

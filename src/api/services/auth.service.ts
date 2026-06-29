@@ -3,8 +3,23 @@ import { accountClient } from "../http/accountClient";
 
 export interface AuthUser {
   userId: string;
+  wecomUserId?: string | null;
+  corpId?: string | null;
+  clientId?: string;
+  scopes?: string[];
   name: string;
-  avatar?: string;
+  avatar: string | null;
+  roles?: AccountRole[];
+  capabilities?: {
+    roles: AccountRole[];
+    canViewAdmin: boolean;
+    canAssignWorkers: boolean;
+    canReviewExceptions: boolean;
+    canImportOperations: boolean;
+    canViewTeamOperations: boolean;
+    canForceRemoveAssignments: boolean;
+    canViewAllTeams: boolean;
+  };
   token?: string;
 }
 
