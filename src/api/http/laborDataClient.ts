@@ -1,5 +1,8 @@
 import axios from "axios";
 
+const configuredLaborTarget = import.meta.env.VITE_MSG_PROXY_TARGET?.trim().replace(/\/+$/, "");
+const resolveLaborDataUrl = (path: string) => configuredLaborTarget ? `${configuredLaborTarget}${path}` : path;
+
 export const externalLaborClient = axios.create({
   timeout: 10_000,
   headers: {
@@ -18,7 +21,7 @@ export interface LaborData {
 }
 
 export async function getLaborData(jobNum: string, assemblySeq: number | string, oprSeq: number | string): Promise<LaborData[]> {
-  const url = `/Msg/LaborData`;
+  const url = resolveLaborDataUrl("/Msg/LaborData");
   const params = {
     JobNum: jobNum,
     AssemblySeq: typeof assemblySeq === "string" ? parseInt(assemblySeq, 10) : assemblySeq,
