@@ -12,7 +12,8 @@ export default defineConfig({
   server: {
     proxy: {
       "/Msg": {
-        target: "http://localhost:44366",
+        // target: "http://localhost:44366",
+        target: "http://122.226.146.110:777",
         changeOrigin: true,
       },
     },

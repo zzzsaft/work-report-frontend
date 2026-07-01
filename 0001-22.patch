@@ -1,0 +1,893 @@
+From 8a36d00b7c1308c74f8972d6a30ef4300795b2e7 Mon Sep 17 00:00:00 2001
+From: tta <643494931@qq.com>
+Date: Wed, 1 Jul 2026 11:06:04 +0800
+Subject: [PATCH] 22
+
+---
+ package-lock.json                             |   3 +-
+ src/api/http/laborDataClient.ts               |  73 ++++++
+ src/api/services/mockWorkReport.repository.ts |  44 +++-
+ src/api/services/realWorkReport.repository.ts |   3 +-
+ src/api/services/workReport.repository.ts     |  14 +-
+ src/domain/work-report.ts                     |   8 +-
+ src/pages/admin/AdminPages.module.less        | 143 ++++++++++
+ src/pages/admin/AdminPages.tsx                | 247 +++++++++++++++++-
+ src/pages/mobile/MobilePages.module.less      |  10 +
+ src/pages/mobile/MobilePages.tsx              |  78 +++++-
+ vite.config.ts                                |   8 +
+ 11 files changed, 608 insertions(+), 23 deletions(-)
+ create mode 100644 src/api/http/laborDataClient.ts
+
+diff --git a/package-lock.json b/package-lock.json
+index 4e78425..04907ca 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -3271,9 +3271,10 @@
+     },
+     "node_modules/less": {
+       "version": "4.6.7",
+-      "resolved": "https://registry.npmmirror.com/less/-/less-4.6.7.tgz",
++      "resolved": "https://registry.npmjs.org/less/-/less-4.6.7.tgz",
+       "integrity": "sha512-o3UxHBPPVY1HtCXx15/z1NlknQiWyafRNbtLEv+6xFaDRI2g2xPKIH43do9dSwt8bGLTsjNSaifa48N3d6odsQ==",
+       "dev": true,
++      "license": "Apache-2.0",
+       "dependencies": {
+         "copy-anything": "^3.0.5",
+         "parse-node-version": "^1.0.1"
+diff --git a/src/api/http/laborDataClient.ts b/src/api/http/laborDataClient.ts
+new file mode 100644
+index 0000000..27e3878
+--- /dev/null
++++ b/src/api/http/laborDataClient.ts
+@@ -0,0 +1,73 @@
++import axios from "axios";
++
++export const externalLaborClient = axios.create({
++  timeout: 10_000,
++  headers: {
++    "Content-Type": "application/json",
++  },
++});
++
++export interface LaborData {
++  JobNum: string;
++  AssemblySeq: number;
++  OprSeq: number;
++  OpCode: string;
++  EmployeeNum: string;
++  indate: string;
++  outdate: string;
++}
++
++export async function getLaborData(jobNum: string, assemblySeq: number | string, oprSeq: number | string): Promise<LaborData[]> {
++  const url = `/Msg/LaborData`;
++  const params = {
++    JobNum: jobNum,
++    AssemblySeq: typeof assemblySeq === "string" ? parseInt(assemblySeq, 10) : assemblySeq,
++    OprSeq: typeof oprSeq === "string" ? parseInt(oprSeq, 10) : oprSeq,
++  };
++  const response = await externalLaborClient.get<LaborData[]>(url, { params });
++  return response.data;
++}
++
++export async function getOperationTimes(jobNum: string, assemblySeq: string | number, oprSeq: string | number): Promise<{ startTime: string; endTime: string }> {
++  try {
++    const laborData = await getLaborData(jobNum, assemblySeq, oprSeq);
++
++    const formatDateTimeLocal = (dateStr: string | null): string => {
++      if (!dateStr || dateStr.trim() === "") return "";
++      const date = new Date(dateStr);
++      if (isNaN(date.getTime())) return "";
++      const year = date.getFullYear();
++      const month = String(date.getMonth() + 1).padStart(2, "0");
++      const day = String(date.getDate()).padStart(2, "0");
++      const hours = String(date.getHours()).padStart(2, "0");
++      const minutes = String(date.getMinutes()).padStart(2, "0");
++      return `${year}-${month}-${day}T${hours}:${minutes}`;
++    };
++
++    if (!laborData || laborData.length === 0) {
++      const now = new Date();
++      const year = now.getFullYear();
++      const month = String(now.getMonth() + 1).padStart(2, "0");
++      const day = String(now.getDate()).padStart(2, "0");
++      const hours = String(now.getHours()).padStart(2, "0");
++      const minutes = String(now.getMinutes()).padStart(2, "0");
++      const nowStr = `${year}-${month}-${day}T${hours}:${minutes}`;
++      return { startTime: nowStr, endTime: nowStr };
++    }
++
++    const data = laborData[0];
++    return {
++      startTime: formatDateTimeLocal(data.indate),
++      endTime: formatDateTimeLocal(data.outdate),
++    };
++  } catch {
++    const now = new Date();
++    const year = now.getFullYear();
++    const month = String(now.getMonth() + 1).padStart(2, "0");
++    const day = String(now.getDate()).padStart(2, "0");
++    const hours = String(now.getHours()).padStart(2, "0");
++    const minutes = String(now.getMinutes()).padStart(2, "0");
++    const nowStr = `${year}-${month}-${day}T${hours}:${minutes}`;
++    return { startTime: nowStr, endTime: nowStr };
++  }
++}
+\ No newline at end of file
+diff --git a/src/api/services/mockWorkReport.repository.ts b/src/api/services/mockWorkReport.repository.ts
+index 4648550..6ae85b2 100644
+--- a/src/api/services/mockWorkReport.repository.ts
++++ b/src/api/services/mockWorkReport.repository.ts
+@@ -284,9 +284,9 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
+     permissionGroup: index === 0 ? "admin" : index < 4 ? "leader" : "worker",
+   })),
+   reports: [
+-    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", startedAt: "2026-06-22T08:12:00+08:00", durationHours: 6.75, photos: [] },
+-    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", operationName: "钻孔", operatorName: "王师傅", status: "running", startedAt: "2026-06-23T09:05:00+08:00", durationHours: 3.4, photos: [] },
+-    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", operationName: "精加工 · 铣削", operatorName: "李师傅", status: "paused", startedAt: "2026-06-23T08:20:00+08:00", durationHours: 2.1, photos: [] },
++    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", photos: [] },
++    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, photos: [] },
++    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, photos: [] },
+   ],
+   exceptions: [
+     { id: "ex-001", type: "overtime", title: "工序用时超过计划", detail: "精加工 · 铣削已超过计划工时 45 分钟", orderNo: "WO-20260623-018", createdAt: "2026-06-23T14:20:00+08:00", status: "open" },
+@@ -468,7 +468,41 @@ export const mockWorkReportRepository: WorkReportRepository = {
+     save(db);
+     return updated;
+   },
+-  async getReports() { await delay(); return load().reports; },
++  async getReports(filters) {
++    await delay();
++    let reports = load().reports;
++    const opCode = filters?.operationCode || "";
++    const opName = filters?.operationName || "";
++    if (opCode) {
++      reports = reports.filter((item) => (item.operationCode || "").includes(opCode));
++    }
++    if (opName) {
++      reports = reports.filter((item) => (item.operationName || "").includes(opName));
++    }
++    if (filters?.startTime || filters?.endTime) {
++      reports = reports.filter((item) => {
++        const claimedAt = item.claimedAt ? new Date(item.claimedAt) : null;
++        if (!claimedAt) return false;
++        if (filters?.startTime && claimedAt < new Date(filters.startTime)) return false;
++        if (filters?.endTime) {
++          const endDate = new Date(filters.endTime);
++          endDate.setDate(endDate.getDate() + 1);
++          if (claimedAt >= endDate) return false;
++        }
++        return true;
++      });
++    }
++    return reports;
++  },
++  async updateReportHours(id, estimatedHours) {
++    await delay();
++    const db = load();
++    const index = db.reports.findIndex((item) => item.id === id);
++    if (index === -1) throw new Error("报工记录不存在");
++    db.reports[index] = { ...db.reports[index], estimatedHours };
++    save(db);
++    return db.reports[index];
++  },
+   async getExceptions() { await delay(); return load().exceptions; },
+   async resolveException(id) { await delay(); const db = load(); db.exceptions = db.exceptions.map((item) => item.id === id ? { ...item, status: "resolved" } : item); save(db); },
+   async importLeaderOperations(rows: LeaderImportDraft[]) {
+@@ -551,7 +585,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
+     const db = load();
+     const assignment = findAssignment(db, assignmentId);
+     db.assignments = db.assignments.filter((item) => item.id !== assignmentId);
+-    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, operationName: `${assignment.operationName}（后台移除：${reason}）`, operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", startedAt: nowIso(), durationHours: 0, photos: [] });
++    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), photos: [] });
+     save(db);
+   },
+   async resetDemo(scenario = "running") { await delay(100); save(initialDb(scenario)); },
+diff --git a/src/api/services/realWorkReport.repository.ts b/src/api/services/realWorkReport.repository.ts
+index e097662..0bcab0e 100644
+--- a/src/api/services/realWorkReport.repository.ts
++++ b/src/api/services/realWorkReport.repository.ts
+@@ -31,7 +31,8 @@ export const realWorkReportRepository: WorkReportRepository = {
+   async searchWorkers(keyword, page, pageSize) { return (await workReportClient.get("/admin/workers", { params: { keyword, page, pageSize } })).data; },
+   async getWorkerPermissions() { return (await workReportClient.get("/admin/worker-permissions")).data; },
+   async updateWorkerPermission(workerId, permissionGroup) { return (await workReportClient.patch(`/admin/workers/${workerId}/permission`, { permissionGroup })).data; },
+-  async getReports() { return (await workReportClient.get("/admin/reports")).data; },
++  async getReports(filters) { return (await workReportClient.get("/admin/reports", { params: filters })).data; },
++  async updateReportHours(id, estimatedHours) { return (await workReportClient.patch(`/admin/reports/${id}/hours`, { estimatedHours })).data; },
+   async getExceptions() { return (await workReportClient.get("/admin/exceptions")).data; },
+   async resolveException(id) { await workReportClient.post(`/admin/exceptions/${id}/resolve`); },
+   async importLeaderOperations(rows) { return (await workReportClient.post("/leader/operations/import", { rows })).data; },
+diff --git a/src/api/services/workReport.repository.ts b/src/api/services/workReport.repository.ts
+index 7fbec26..0db7e4d 100644
+--- a/src/api/services/workReport.repository.ts
++++ b/src/api/services/workReport.repository.ts
+@@ -41,6 +41,17 @@ export interface PaginatedResult<T> {
+   hasMore: boolean;
+ }
+ 
++export interface ReportFilters {
++  keyword?: string;
++  orderNo?: string;
++  operatorName?: string;
++  status?: string;
++  operationCode?: string;
++  operationName?: string;
++  startTime?: string;
++  endTime?: string;
++}
++
+ export interface WorkReportRepository {
+   getCapabilities(): Promise<UserCapabilities>;
+   getCurrentAssignment(): Promise<OperationAssignment | null>;
+@@ -62,7 +73,8 @@ export interface WorkReportRepository {
+   searchWorkers(keyword: string, page: number, pageSize: number): Promise<{ items: WorkerSummary[]; hasMore: boolean }>;
+   getWorkerPermissions(): Promise<WorkerPermission[]>;
+   updateWorkerPermission(workerId: string, permissionGroup: PermissionGroup): Promise<WorkerPermission>;
+-  getReports(): Promise<ReportRecord[]>;
++  getReports(filters?: ReportFilters): Promise<ReportRecord[]>;
++  updateReportHours(id: string, estimatedHours: number): Promise<ReportRecord>;
+   getExceptions(): Promise<ProductionException[]>;
+   resolveException(id: string): Promise<void>;
+   importLeaderOperations(rows: LeaderImportDraft[]): Promise<LeaderImportResult>;
+diff --git a/src/domain/work-report.ts b/src/domain/work-report.ts
+index 3d56951..bbf9dcb 100644
+--- a/src/domain/work-report.ts
++++ b/src/domain/work-report.ts
+@@ -238,11 +238,17 @@ export interface ReportRecord {
+   id: string;
+   orderNo: string;
+   productName: string;
++  partCode: string;
++  partName: string;
++  operationCode: string;
+   operationName: string;
+   operatorName: string;
+   status: OperationStatus;
+-  startedAt: string;
++  claimedAt: string | undefined;
++  estimatedHours: number;
+   durationHours: number;
++  startedAt: string | undefined;
++  completedAt: string | undefined;
+   photos: EvidencePhoto[];
+ }
+ 
+diff --git a/src/pages/admin/AdminPages.module.less b/src/pages/admin/AdminPages.module.less
+index 8b91153..fada6b7 100644
+--- a/src/pages/admin/AdminPages.module.less
++++ b/src/pages/admin/AdminPages.module.less
+@@ -489,6 +489,129 @@
+ .permission-select-cell .spinner.small { display: inline-block; width: 14px; height: 14px; border-width: 2px; vertical-align: middle; }
+ 
+ 
++.reports-message { margin-bottom: 12px; padding: 10px 14px; border-radius: 6px;
++  background: #dbeafe; color: #1e40af; font-size: 13px; }
++
++.reports-filter { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 16px; padding: 16px; border-radius: 8px;
++  background: #f8fafc; }
++
++.reports-filter .filter-search { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px;
++  background: #fff; }
++
++.reports-filter .filter-search input { flex: 1; border: 0; outline: none; font-size: 14px; }
++
++.reports-filter .filter-search svg { color: #94a3b8; }
++
++.reports-filter .filter-input { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
++
++.reports-filter .filter-input label { font-size: 12px; font-weight: 600;
++  color: #64748b; }
++
++.reports-filter .filter-input input { min-height: 36px; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; }
++
++.reports-filter .filter-select { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
++
++.reports-filter .filter-select label { font-size: 12px; font-weight: 600;
++  color: #64748b; }
++
++.reports-filter .filter-select select { min-height: 36px; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; }
++
++.reports-filter .filter-date { display: flex; align-items: center; gap: 8px; }
++
++.reports-filter .filter-date input { min-height: 36px; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; }
++
++.reports-filter .filter-date span { font-size: 13px;
++  color: #64748b; }
++
++.reports-filter .filter-actions { display: flex; gap: 8px; }
++
++.reports-filter .filter-search-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 6px; font-size: 13px; font-weight: 600;
++  background: #1e40af; color: #fff; cursor: pointer; }
++
++.reports-filter .filter-reset-btn { min-height: 36px; padding: 0 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;
++  background: #fff; color: #64748b; cursor: pointer; }
++
++.table-wrap .reports-table { width: 100%; border-collapse: collapse; white-space: normal; }
++
++.table-wrap .reports-table th { padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600;
++  background: #f1f5f9; color: #475569; border-bottom: 2px solid #e2e8f0; }
++
++.table-wrap .reports-table td { padding: 12px 16px; font-size: 13px;
++  border-top: none; border-bottom: 1px solid #e2e8f0; }
++
++.table-wrap .reports-table tbody tr:hover {
++  background: #f8fafc; }
++
++.table-wrap .reports-table .cell-with-sub { display: flex; flex-direction: column; gap: 2px; }
++
++.table-wrap .reports-table .cell-with-sub strong { font-size: 13px;
++  color: #1e293b; }
++
++.table-wrap .reports-table .cell-with-sub span { font-size: 12px;
++  color: #64748b; display: block; margin-top: 0; }
++
++.table-wrap .reports-table .operator-cell { font-weight: 600;
++  color: #1e293b; }
++
++.table-wrap .reports-table .status-tag { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
++
++.table-wrap .reports-table .status-claimed {
++  background: #fef3c7; color: #d97706; }
++
++.table-wrap .reports-table .status-running {
++  background: #dbeafe; color: #2563eb; }
++
++.table-wrap .reports-table .status-paused {
++  background: #f3e8ff; color: #7c3aed; }
++
++.table-wrap .reports-table .status-completed {
++  background: #d1fae5; color: #059669; }
++
++.table-wrap .reports-table .status-cancelled {
++  background: #fee2e2; color: #dc2626; }
++
++.table-wrap .reports-table .hours-value { font-weight: 600;
++  color: #1e40af; }
++
++.table-wrap .reports-table .edit-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-radius: 4px; font-size: 12px;
++  background: transparent; color: #2563eb; cursor: pointer; }
++
++.table-wrap .reports-table .edit-btn:hover {
++  background: #eff6ff; }
++
++.table-wrap .reports-table .edit-actions { display: flex; gap: 6px; }
++
++.table-wrap .reports-table .confirm-btn { padding: 4px; border: 0; border-radius: 4px;
++  background: #22c55e; color: #fff; cursor: pointer; }
++
++.table-wrap .reports-table .cancel-btn { padding: 4px; border: 0; border-radius: 4px;
++  background: #e2e8f0; color: #64748b; cursor: pointer; }
++
++.table-wrap .reports-table .edit-cell { display: flex; align-items: center; gap: 8px; }
++
++.table-wrap .reports-table .edit-cell input { width: 80px; min-height: 32px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 6px; text-align: center; }
++
++.reports-pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
++
++.reports-pagination span { font-size: 13px;
++  color: #64748b; }
++
++.pagination-buttons { display: flex; align-items: center; gap: 8px; }
++
++.pagination-btn { min-height: 32px; padding: 0 12px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px;
++  background: #fff; color: #64748b; cursor: pointer; }
++
++.pagination-btn:disabled { opacity: 0.5; cursor: not-allowed; }
++
++.pagination-current { padding: 0 8px; font-size: 13px; font-weight: 600;
++  color: #1e293b; }
++
++.export-csv-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 16px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 600;
++  background: #1e40af; color: #fff; cursor: pointer; }
++
++.export-csv-btn:disabled { opacity: 0.6; cursor: not-allowed; }
++
++
+ @media (min-width: 600px) { .action-dock { right: 50%; left: auto; width: 520px; transform: translateX(50%); } }
+ 
+ @media (max-width: 1100px) { .kpi-grid { grid-template-columns: 1fr 1fr; }
+@@ -518,6 +641,26 @@
+ 
+ .search-box { width: 100%; }
+ 
++.filter-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; padding: 16px; border-radius: 8px;
++  background: #f8fafc; }
++
++.filter-row > div { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
++
++.filter-row label { font-size: 13px; font-weight: 700;
++  color: #64748b; }
++
++.filter-row input { min-height: 36px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 14px; }
++
++.edit-cell { display: flex; align-items: center; gap: 8px; }
++
++.edit-cell input { width: 80px; min-height: 32px; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 6px; text-align: center; }
++
++.import-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
++
++.import-search { display: flex; align-items: center; gap: 8px; }
++
++.small-action { padding: 2px 6px; font-size: 12px; }
++
+ .kpi-grid { grid-template-columns: 1fr; }
+ 
+ .exception-list article { align-items: start; grid-template-columns: 44px 1fr; }
+diff --git a/src/pages/admin/AdminPages.tsx b/src/pages/admin/AdminPages.tsx
+index 64ecbbf..6cbad61 100644
+--- a/src/pages/admin/AdminPages.tsx
++++ b/src/pages/admin/AdminPages.tsx
+@@ -4,7 +4,7 @@ import { registerAllModules } from "handsontable/registry";
+ import type Handsontable from "handsontable/base";
+ import "handsontable/styles/handsontable.min.css";
+ import "handsontable/styles/ht-theme-main.min.css";
+-import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Factory, KeyRound, Power, RefreshCw, Save, Search, ShieldCheck, Timer, Trash2, Upload, UserCog, UserPlus, UsersRound, Wrench } from "lucide-react";
++import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Download, Edit3, Factory, KeyRound, Power, RefreshCw, Save, Search, ShieldCheck, Timer, Trash2, Upload, UserCog, UserPlus, UsersRound, Wrench, X } from "lucide-react";
+ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+ import { AuthService, type AccountRole, type AdminAccount } from "@/api/services/auth.service";
+ import { workReportRepository } from "@/api/services/workReport.service";
+@@ -270,6 +270,7 @@ export function LeaderImportPage() {
+   const [submitting, setSubmitting] = useState(false);
+   const [message, setMessage] = useState("");
+   const [xftConfig, setXftConfig] = useState<XftConfig>(defaultXftConfig);
++  const [searchKeyword, setSearchKeyword] = useState("");
+   const rows = useMemo(() => getImportDraftRows(tableRows), [tableRows]);
+   const errors = useMemo(() => validateImportGridRows(tableRows), [tableRows]);
+   const errorByCell = useMemo(() => {
+@@ -277,6 +278,18 @@ export function LeaderImportPage() {
+     errors.forEach((error) => map.set(`${error.row}-${error.column}`, error.message));
+     return map;
+   }, [errors]);
++
++  const filteredRows = useMemo(() => {
++    if (!searchKeyword.trim()) return tableRows;
++    const keyword = searchKeyword.toLowerCase();
++    return tableRows.filter((row) => 
++      row.productCode.toLowerCase().includes(keyword) ||
++      row.partCode.toLowerCase().includes(keyword) ||
++      row.operationCode.toLowerCase().includes(keyword) ||
++      row.operationName.toLowerCase().includes(keyword)
++    );
++  }, [tableRows, searchKeyword]);
++
+   const updateRows = (changes: Handsontable.CellChange[] | null, source: Handsontable.ChangeSource) => {
+     if (!changes || source === "loadData") return;
+     setMessage("");
+@@ -290,6 +303,7 @@ export function LeaderImportPage() {
+       return nextRows;
+     });
+   };
++
+   const submit = async () => {
+     if (!canImportOperations) {
+       setMessage("当前账号没有工序导入权限。");
+@@ -306,7 +320,55 @@ export function LeaderImportPage() {
+       setSubmitting(false);
+     }
+   };
+-  return <><AdminHeader title="小组长工序导入" description="直接从 Excel 粘贴或在单元格内编辑，格式错误会标红" action={canImportOperations && <button className={cx(styles["admin-primary-action"])} disabled={submitting || !rows.length || errors.length > 0} onClick={() => void submit()}><Upload />确认导入</button>} /><XftConfigPanel onSaved={setXftConfig} /><XftHoursImportPanel salaryPeriod={xftConfig.salaryPeriod} /><section className={cx(styles["admin-panel"], styles["import-panel"])}><div className={cx(styles["import-summary"])}><span>已填写 {rows.length} 行</span>{errors.length > 0 ? <strong className={cx(styles["danger-text"])}>{errors.length} 个单元格需修正</strong> : <strong className={cx(styles["success-text"])}>校验通过</strong>}</div>{message && <div className={cx(styles["admin-message"])}>{message}</div>}<div className={cx(styles["leader-import-sheet"], "ht-theme-main")}><HotTable data={tableRows} columns={importColumns.map((column) => ({ data: column.key, width: column.width }))} colHeaders={importColumns.map((column) => column.title)} rowHeaders={true} height={520} width="100%" stretchH="all" autoWrapRow={true} autoWrapCol={true} minSpareRows={6} manualColumnResize={true} contextMenu={["row_above", "row_below", "remove_row", "---------", "undo", "redo"]} copyPaste={true} comments={true} cells={(row, column) => { const key = importColumns[column]?.key; const error = key ? errorByCell.get(`${row}-${key}`) : undefined; const cellProperties: Handsontable.CellProperties = {} as Handsontable.CellProperties; if (error) { cellProperties.className = "leader-import-invalid"; cellProperties.comment = { value: error }; } return cellProperties; }} afterChange={updateRows} licenseKey="non-commercial-and-evaluation" /></div></section></>;
++
++  return (<>
++    <AdminHeader title="小组长工序导入" description="直接从 Excel 粘贴或在单元格内编辑，格式错误会标红" action={canImportOperations && <button className={cx(styles["admin-primary-action"])} disabled={submitting || !rows.length || errors.length > 0} onClick={() => void submit()}><Upload />确认导入</button>} />
++    <XftConfigPanel onSaved={setXftConfig} />
++    <XftHoursImportPanel salaryPeriod={xftConfig.salaryPeriod} />
++    <section className={cx(styles["admin-panel"], styles["import-panel"])}>
++      <div className={cx(styles["import-header"])}>
++        <div className={cx(styles["import-summary"])}>
++          <span>已填写 {rows.length} 行</span>
++          {errors.length > 0 ? <strong className={cx(styles["danger-text"])}>{errors.length} 个单元格需修正</strong> : <strong className={cx(styles["success-text"])}>校验通过</strong>}
++        </div>
++        <div className={cx(styles["import-search"])}>
++          <SearchBox value={searchKeyword} onChange={setSearchKeyword} placeholder="搜索产品号、部件号、工序号或工序名" />
++          {searchKeyword && <button className={cx(styles["table-action"])} onClick={() => setSearchKeyword("")}><X />清除</button>}
++        </div>
++      </div>
++      {message && <div className={cx(styles["admin-message"])}>{message}</div>}
++      <div className={cx(styles["leader-import-sheet"], "ht-theme-main")}>
++        <HotTable
++          data={filteredRows}
++          columns={importColumns.map((column) => ({ data: column.key, width: column.width }))}
++          colHeaders={importColumns.map((column) => column.title)}
++          rowHeaders={true}
++          height={520}
++          width="100%"
++          stretchH="all"
++          autoWrapRow={true}
++          autoWrapCol={true}
++          minSpareRows={6}
++          manualColumnResize={true}
++          contextMenu={["row_above", "row_below", "remove_row", "---------", "undo", "redo"]}
++          copyPaste={true}
++          comments={true}
++          cells={(row, column) => {
++            const key = importColumns[column]?.key;
++            const error = key ? errorByCell.get(`${row}-${key}`) : undefined;
++            const cellProperties: Handsontable.CellProperties = {} as Handsontable.CellProperties;
++            if (error) {
++              cellProperties.className = "leader-import-invalid";
++              cellProperties.comment = { value: error };
++            }
++            return cellProperties;
++          }}
++          afterChange={updateRows}
++          licenseKey="non-commercial-and-evaluation"
++        />
++      </div>
++    </section>
++  </>);
+ }
+ 
+ export function AssignmentAdminPage() {
+@@ -358,13 +420,182 @@ export function AssignmentAdminPage() {
+ }
+ 
+ export function ReportsPage() {
+-  const [search, setSearch] = useState("");
+-  const load = useCallback(() => workReportRepository.getReports(), []);
++  const [filters, setFilters] = useState<{
++    keyword: string;
++    orderNo: string;
++    operatorName: string;
++    status: string;
++    startTime: string;
++    endTime: string;
++  }>({ keyword: "", orderNo: "", operatorName: "", status: "", startTime: "", endTime: "" });
++  const [editingId, setEditingId] = useState("");
++  const [editingHours, setEditingHours] = useState("");
++  const [message, setMessage] = useState("");
++  const load = useCallback(() => workReportRepository.getReports(filters), [filters]);
+   const { data: reports = [], loading, error, reload } = useAsyncResource<ReportRecord[]>(load);
+-  const filtered = reports.filter((item) => `${item.orderNo}${item.operatorName}${item.productName}`.includes(search));
+-  if (loading) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" /><section className={cx(styles["admin-panel"])}><LoadingTable /></section></>;
+-  if (error) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" /><section className={cx(styles["admin-panel"])}><AdminError message={error} retry={() => void reload()} /></section></>;
+-  return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<SearchBox value={search} onChange={setSearch} />} /><section className={cx(styles["admin-panel"])}><div className={cx(styles["table-wrap"])}><table><thead><tr><th>工单与产品</th><th>工序</th><th>报工人员</th><th>开始时间</th><th>累计工时</th><th>状态</th><th>凭证</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong><small>{item.productName}</small></td><td>{item.operationName}</td><td>{item.operatorName}</td><td>{new Date(item.startedAt).toLocaleString("zh-CN")}</td><td>{item.durationHours.toFixed(1)} 小时</td><td><AdminStatus status={item.status} /></td><td><button className={cx(styles["table-action"])}>查看照片</button></td></tr>)}</tbody></table></div></section></>;
++
++  const handleFilterChange = (key: keyof typeof filters, value: string) => {
++    setFilters((prev) => ({ ...prev, [key]: value }));
++  };
++
++  const handleResetFilters = () => {
++    setFilters({ keyword: "", orderNo: "", operatorName: "", status: "", startTime: "", endTime: "" });
++  };
++
++  const handleEditHours = (record: ReportRecord) => {
++    setEditingId(record.id);
++    setEditingHours(String(record.estimatedHours));
++  };
++
++  const handleSaveHours = async (record: ReportRecord) => {
++    const hours = parseFloat(editingHours);
++    if (!Number.isFinite(hours) || hours <= 0) {
++      setMessage("工时必须大于0");
++      return;
++    }
++    try {
++      await workReportRepository.updateReportHours(record.id, hours);
++      setMessage("修改成功");
++      await reload();
++    } catch (err) {
++      setMessage("修改失败");
++      console.error("Failed to update hours:", err);
++    } finally {
++      setEditingId("");
++      setEditingHours("");
++      setTimeout(() => setMessage(""), 3000);
++    }
++  };
++
++  const handleCancelEdit = () => {
++    setEditingId("");
++    setEditingHours("");
++  };
++
++  const exportToExcel = () => {
++    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "预估工时", "领取人员", "来源", "状态", "领取时间", "实际工时"];
++    const rows = reports.map((item) => [
++      item.orderNo,
++      item.productName,
++      "",
++      item.partCode,
++      item.partName,
++      item.operationCode,
++      item.operationName,
++      1,
++      item.estimatedHours,
++      item.operatorName,
++      "自主领取",
++      statusLabel[item.status as keyof typeof statusLabel] || item.status,
++      item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
++      item.durationHours
++    ]);
++
++    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
++    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
++    const link = document.createElement("a");
++    link.href = URL.createObjectURL(blob);
++    link.download = `报工记录_${new Date().toISOString().slice(0, 10)}.csv`;
++    link.click();
++    setMessage("导出成功");
++    setTimeout(() => setMessage(""), 3000);
++  };
++
++  if (loading) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><LoadingTable /></section></>;
++  if (error) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><AdminError message={error} retry={() => void reload()} /></section></>;
++
++  return (<>
++    <AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} onClick={exportToExcel}><Download />导出CSV</button>} />
++    <section className={cx(styles["admin-panel"])}>
++      {message && <div className={cx(styles["reports-message"])}>{message}</div>}
++      <div className={cx(styles["reports-filter"])}>
++        <div className={cx(styles["filter-search"])}>
++          <Search />
++          <input type="text" value={filters.keyword} onChange={(e) => handleFilterChange("keyword", e.target.value)} placeholder="搜索工单、产品、工序或人员" />
++        </div>
++        <div className={cx(styles["filter-input"])}>
++          <label>工单编号</label>
++          <input type="text" value={filters.orderNo} onChange={(e) => handleFilterChange("orderNo", e.target.value)} placeholder="工单编号" />
++        </div>
++        <div className={cx(styles["filter-input"])}>
++          <label>人员姓名</label>
++          <input type="text" value={filters.operatorName} onChange={(e) => handleFilterChange("operatorName", e.target.value)} placeholder="人员姓名" />
++        </div>
++        <div className={cx(styles["filter-select"])}>
++          <label>状态</label>
++          <select value={filters.status} onChange={(e) => handleFilterChange("status", e.target.value)}>
++            <option value="">全部</option>
++            <option value="claimed">待开始</option>
++            <option value="running">进行中</option>
++            <option value="paused">已暂停</option>
++            <option value="completed">已完成</option>
++            <option value="cancelled">已取消</option>
++          </select>
++        </div>
++        <div className={cx(styles["filter-date"])}>
++          <input type="date" value={filters.startTime} onChange={(e) => handleFilterChange("startTime", e.target.value)} />
++          <span>至</span>
++          <input type="date" value={filters.endTime} onChange={(e) => handleFilterChange("endTime", e.target.value)} />
++        </div>
++        <div className={cx(styles["filter-actions"])}>
++          <button className={cx(styles["filter-search-btn"])} onClick={() => void reload()}><Search />搜索</button>
++          <button className={cx(styles["filter-reset-btn"])} onClick={handleResetFilters}>重置</button>
++        </div>
++      </div>
++      <div className={cx(styles["table-wrap"])}>
++        <table className={cx(styles["reports-table"])}>
++          <thead>
++            <tr>
++              <th>工单</th>
++              <th>产品</th>
++              <th>部件</th>
++              <th>工序</th>
++              <th>数量/工时</th>
++              <th>领取人员</th>
++              <th>来源</th>
++              <th>状态</th>
++              <th>领取时间</th>
++              <th>实际工时</th>
++              <th>操作</th>
++            </tr>
++          </thead>
++          <tbody>
++            {reports.map((item) => (<tr key={item.id}>
++              <td><strong>{item.orderNo}</strong></td>
++              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.partCode}</span></div></td>
++              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></td>
++              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></td>
++              <td><div className={cx(styles["cell-with-sub"])}><strong>1</strong><span>{item.estimatedHours}小时</span></div></td>
++              <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
++              <td>自主领取</td>
++              <td><span className={cx(styles["status-tag"], styles[`status-${item.status}`])}>{statusLabel[item.status as keyof typeof statusLabel] || item.status}</span></td>
++              <td>{item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "-"}</td>
++              <td>
++                {editingId === item.id ? (<div className={cx(styles["edit-cell"])}>
++                  <input type="number" min="0" step="0.1" value={editingHours} onChange={(e) => setEditingHours(e.target.value)} />
++                </div>) : (<span className={cx(styles["hours-value"])}>{item.durationHours.toFixed(2)} 小时</span>)}
++              </td>
++              <td>
++                {editingId === item.id ? (<div className={cx(styles["edit-actions"])}>
++                  <button className={cx(styles["table-action"], styles["confirm-btn"])} onClick={() => handleSaveHours(item)}><Check /></button>
++                  <button className={cx(styles["table-action"], styles["cancel-btn"])} onClick={handleCancelEdit}><X /></button>
++                </div>) : (<button className={cx(styles["edit-btn"])} onClick={() => handleEditHours(item)}><Edit3 />修改</button>)}
++              </td>
++            </tr>))}
++            {!reports.length && <tr><td colSpan={11}>没有匹配的报工记录。</td></tr>}
++          </tbody>
++        </table>
++      </div>
++      <div className={cx(styles["reports-pagination"])}>
++        <span>共 {reports.length} 条记录</span>
++        <div className={cx(styles["pagination-buttons"])}>
++          <button className={cx(styles["pagination-btn"])} disabled>上一页</button>
++          <span className={cx(styles["pagination-current"])}>第 1 页</span>
++          <button className={cx(styles["pagination-btn"])} disabled>下一页</button>
++        </div>
++      </div>
++    </section>
++  </>);
+ }
+ 
+ export function PeoplePage() {
+diff --git a/src/pages/mobile/MobilePages.module.less b/src/pages/mobile/MobilePages.module.less
+index 5c60afd..aeab653 100644
+--- a/src/pages/mobile/MobilePages.module.less
++++ b/src/pages/mobile/MobilePages.module.less
+@@ -544,6 +544,16 @@
+ 
+ .claim-success > div { display: grid; width: 100%; grid-template-columns: 1fr 1fr; gap: 10px; }
+ 
++.claim-success .time-input-form { display: grid; grid-template-columns: 1fr; gap: 16px; width: 100%; margin-top: 20px; }
++
++.claim-success .time-input-section { display: flex; flex-direction: column; gap: 8px; }
++
++.claim-success .time-input-section > label { font-size: 16px; font-weight: 600; color: var(--navy-900); }
++
++.claim-success .time-input { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; font-size: 16px; }
++
++.claim-success .claim-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 20px; }
++
+ .claim-page .claim-panel,.claim-page .claim-success { margin-bottom: 18px; }
+ 
+ .claimed-section { display: grid; gap: 13px; margin-top: 20px; scroll-margin-top: 18px; }
+diff --git a/src/pages/mobile/MobilePages.tsx b/src/pages/mobile/MobilePages.tsx
+index 248a6aa..1fa7600 100644
+--- a/src/pages/mobile/MobilePages.tsx
++++ b/src/pages/mobile/MobilePages.tsx
+@@ -13,6 +13,7 @@ import { createImagePreviews, filesToCompletionPhotos, revokeImagePreviews, sele
+ import { getErrorMessage } from "@/utils/errors";
+ import { openXft } from "@/utils/xft";
+ import { useNavigate } from "react-router-dom";
++import { getOperationTimes } from "@/api/http/laborDataClient";
+ import styles from "./MobilePages.module.less";
+ 
+ const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
+@@ -220,13 +221,63 @@ export function ClaimOperationsPage() {
+     actionLoading, claimLoading, claimProducts, claimProductsPagination, claimParts, claimOperations, recentClaimOperations, error,
+     searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, clearError,
+   } = useWorkReportStore();
+-  const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
++  const [claimedOperation, setClaimedOperation] = useState<ClaimableOperation | null>(null);
++  const [startTime, setStartTime] = useState("");
++  const [endTime, setEndTime] = useState("");
++  const [timesLoading, setTimesLoading] = useState(false);
+   const navigate = useNavigate();
+   useEffect(() => { void loadRecentClaimableOperations(); }, [loadRecentClaimableOperations]);
++
++  useEffect(() => {
++    if (claimedOperation) {
++      setStartTime("");
++      setEndTime("");
++      setTimesLoading(true);
++
++      const fetchOperationTimes = async () => {
++        try {
++          const jobNum = claimedOperation.orderNo;
++          const assemblySeq = claimedOperation.partNo || "0";
++          const oprSeq = claimedOperation.operationNo || "0";
++
++          const times = await getOperationTimes(jobNum, assemblySeq, oprSeq);
++          setStartTime(times.startTime);
++          setEndTime(times.endTime);
++        } catch {
++          const now = new Date();
++          const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
++          setStartTime(nowStr);
++          setEndTime(nowStr);
++        } finally {
++          setTimesLoading(false);
++        }
++      };
++
++      void fetchOperationTimes();
++    }
++  }, [claimedOperation]);
++
++  const handleConfirmClaim = async () => {
++    if (!claimedOperation) return;
++    try {
++      await claimOperation(claimedOperation.id);
++      setClaimedOperation(null);
++      await loadRecentClaimableOperations();
++    } catch (err) {
++      console.error("Failed to claim operation:", err);
++    }
++  };
++
++  const handleCancelClaim = () => {
++    setClaimedOperation(null);
++    setStartTime("");
++    setEndTime("");
++  };
++
+   return <div className={cx(styles["standard-page"], styles["claim-page"])}>
+     <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
+     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
+-    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
++    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimedOperation} startTime={startTime} endTime={endTime} timesLoading={timesLoading} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={(operationId) => { const op = claimOperations.find((o: ClaimableOperation) => o.id === operationId) || recentClaimOperations.find((o: ClaimableOperation) => o.id === operationId); if (op) setClaimedOperation(op); }} onConfirmClaim={handleConfirmClaim} onCancelClaim={handleCancelClaim} onContinue={() => setClaimedOperation(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
+   </div>;
+ }
+ 
+@@ -235,7 +286,7 @@ function OperationCard({ item, removing, onRemove, v1Status = false }: { item: O
+ }
+ 
+ function ClaimOperationsPanel({
+-  mode = "v2", loading, products, productPagination, parts, operations, recentOperations = [], claimed, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed,
++  mode = "v2", loading, products, productPagination, parts, operations, recentOperations = [], claimed, startTime, endTime, timesLoading, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed, onConfirmClaim, onCancelClaim,
+ }: {
+   mode?: "v1" | "v2";
+   loading: boolean;
+@@ -244,15 +295,20 @@ function ClaimOperationsPanel({
+   parts: ClaimablePart[];
+   operations: ClaimableOperation[];
+   recentOperations?: ClaimableOperation[];
+-  claimed: OperationAssignment | null;
++  claimed: ClaimableOperation | null;
++  startTime: string;
++  endTime: string;
++  timesLoading: boolean;
+   onSearch: (keyword: string, page?: number, pageSize?: number) => Promise<void>;
+   onLoadRecent?: () => Promise<void>;
+   onLoadParts: (productId: string) => Promise<void>;
+   onLoadOperations: (partId: string) => Promise<void>;
+-  onClaim: (operationId: string) => Promise<void>;
++  onClaim: (operationId: string) => void;
+   onGoStart?: (assignment: OperationAssignment) => Promise<void>;
+   onContinue: () => void;
+   onViewClaimed?: () => void;
++  onConfirmClaim: () => void;
++  onCancelClaim: () => void;
+ }) {
+   const [keyword, setKeyword] = useState("");
+   const [selectedProduct, setSelectedProduct] = useState<ClaimableProduct | null>(null);
+@@ -264,6 +320,8 @@ function ClaimOperationsPanel({
+   const [searchPage, setSearchPage] = useState(1);
+   const [recentDate, setRecentDate] = useState<ClaimRecentDateFilter>("all");
+   const [recentStatus, setRecentStatus] = useState<Exclude<ClaimOperationFilter, "claimed">>("available");
++  const [localStartTime, setLocalStartTime] = useState(startTime);
++  const [localEndTime, setLocalEndTime] = useState(endTime);
+   const productPageCount = Math.max(1, Math.ceil(productPagination.total / productPagination.pageSize));
+   const filteredSearchOperations = operations.filter((item) => filter === "all" ? true : item.status === filter);
+   const searchPageCount = Math.max(1, Math.ceil(filteredSearchOperations.length / claimSearchPageSize));
+@@ -273,6 +331,12 @@ function ClaimOperationsPanel({
+     const matchesStatus = recentStatus === "all" ? true : item.status === "available";
+     return matchesDate && matchesStatus;
+   });
++
++  useEffect(() => {
++    setLocalStartTime(startTime);
++    setLocalEndTime(endTime);
++  }, [startTime, endTime]);
++
+   const search = async () => {
+     setSelectedProduct(null);
+     setSelectedPart(null);
+@@ -314,7 +378,9 @@ function ClaimOperationsPanel({
+   }, [dismissedAutoPartId, onLoadOperations, parts, selectedPart, selectedProduct, view]);
+   const loadRecent = async () => { await onLoadRecent?.(); };
+   const renderOperation = (item: ClaimableOperation) => <article key={item.id} className={item.status !== "available" ? styles.disabled : undefined}><div><strong>{item.operationName}</strong><span className={styles[`claim-status-${item.status}`]}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{formatProductPartCode(item.productCode, item.partCode)}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><button className={styles["primary-button"]} disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</button></article>;
+-  if (claimed) return <section className={styles["claim-success"]}><CheckCircle2 /><h2>{mode === "v1" ? "已领取工序" : "已加入工序清单"}</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div>{mode === "v1" ? <button className={styles["primary-button"]} onClick={onViewClaimed}><ClipboardList />查看已领取</button> : <button className={styles["primary-button"]} onClick={() => void onGoStart?.(claimed)}><Play />去开始</button>}<button className={styles["ghost-button"]} onClick={onContinue}>继续领取</button></div></section>;
++
++  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><label className={styles["field-label"]}>开工时间</label><input type="datetime-local" value={localStartTime} onChange={(e) => setLocalStartTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div><div className={styles["time-input-section"]}><label className={styles["field-label"]}>完工时间</label><input type="datetime-local" value={localEndTime} onChange={(e) => setLocalEndTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div></div><div className={styles["claim-actions"]}><button className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</button><button className={styles["primary-button"]} disabled={loading} onClick={onConfirmClaim}><CheckCircle2 />确认领取</button></div></section>;
++
+   return <section className={styles["claim-panel"]}>
+     <div className={styles["claim-view-tabs"]} aria-label="领取工序视图切换"><button className={view === "search" ? styles.active : undefined} onClick={() => setView("search")}>搜索领取</button><button className={view === "recent" ? styles.active : undefined} onClick={() => setView("recent")}>查看最近</button></div>
+     {loading && <div className={styles["claim-loading"]}><span className="spinner" />正在读取...</div>}
+diff --git a/vite.config.ts b/vite.config.ts
+index badf6cc..db0906b 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -9,4 +9,12 @@ export default defineConfig({
+       "@": fileURLToPath(new URL("./src", import.meta.url)),
+     },
+   },
++  server: {
++    proxy: {
++      "/Msg": {
++        target: "http://localhost:44366",
++        changeOrigin: true,
++      },
++    },
++  },
+ });
+-- 
+2.54.0.windows.1
+
