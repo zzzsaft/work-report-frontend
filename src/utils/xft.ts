@@ -1,7 +1,9 @@
-const authApiBaseURL = import.meta.env.VITE_AUTH_API_BASE_URL;
+import { getApiBaseUrl } from "@/api/http/apiBaseUrl";
+
+const authApiBaseURL = getApiBaseUrl();
 
 if (!authApiBaseURL) {
-  throw new Error("缺少 VITE_AUTH_API_BASE_URL 配置");
+  throw new Error("缺少 VITE_API_BASE_URL 配置");
 }
 
 const allowedXftParams = new Set(["pageId", "todoid"]);

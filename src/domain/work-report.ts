@@ -113,6 +113,7 @@ export type AdminRouteKey =
   | "people"
   | "permissions"
   | "accounts"
+  | "wecom"
   | "exceptions"
   | "settings";
 
@@ -365,6 +366,7 @@ export function canAccessAdminRoute(capabilities: UserCapabilities | null | unde
     people: capabilities.canViewAdmin,
     permissions: canManagePermissions(capabilities),
     accounts: canManagePermissions(capabilities),
+    wecom: capabilities.canViewAdmin,
     exceptions: capabilities.canReviewExceptions,
     settings: capabilities.canViewAdmin,
   };

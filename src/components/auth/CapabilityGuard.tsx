@@ -5,7 +5,7 @@ import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { LoadingScreen } from "./LoadingScreen";
 import styles from "./CapabilityGuard.module.less";
 
-const adminRouteOrder: AdminRouteKey[] = ["dashboard", "orders", "import", "assignments", "reports", "people", "permissions", "accounts", "exceptions", "settings"];
+const adminRouteOrder: AdminRouteKey[] = ["dashboard", "orders", "import", "assignments", "reports", "people", "permissions", "accounts", "wecom", "exceptions", "settings"];
 
 function getAdminHome(capabilities: ReturnType<typeof useWorkReportStore.getState>["capabilities"]) {
   return adminRouteOrder.find((routeKey) => canAccessAdminRoute(capabilities, routeKey));

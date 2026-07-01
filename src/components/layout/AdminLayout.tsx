@@ -5,6 +5,7 @@ import {
   FileClock,
   Gauge,
   Menu,
+  QrCode,
   Settings,
   ShieldCheck,
   Upload,
@@ -32,6 +33,7 @@ const items = [
   ["/admin/people", "people", "人员统计", UsersRound],
   ["/admin/permissions", "permissions", "权限设置", ShieldCheck],
   ["/admin/accounts", "accounts", "账号管理", UserCog],
+  ["/admin/wecom", "wecom", "企业微信管理", QrCode],
   ["/admin/exceptions", "exceptions", "异常审核", AlertTriangle],
   ["/admin/settings", "settings", "系统设置", Settings],
 ] as const;

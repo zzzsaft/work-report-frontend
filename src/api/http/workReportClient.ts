@@ -1,10 +1,11 @@
 import axios from "axios";
 import { setupAuthInterceptors } from "./interceptors";
+import { getApiBaseUrl } from "./apiBaseUrl";
 
-const baseURL = import.meta.env.VITE_WORK_REPORT_API_BASE_URL;
+const baseURL = getApiBaseUrl("/work-report-api");
 
 export const workReportClient = axios.create({
-  baseURL: baseURL || "/work-report-api",
+  baseURL,
   timeout: 20_000,
   headers: { "Content-Type": "application/json" },
 });
