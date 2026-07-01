@@ -471,8 +471,26 @@ export const mockWorkReportRepository: WorkReportRepository = {
   async getReports(filters) {
     await delay();
     let reports = load().reports;
+    const keyword = (filters?.keyword || "").trim().toLowerCase();
+    const orderNo = (filters?.orderNo || "").trim().toLowerCase();
+    const operatorName = (filters?.operatorName || "").trim().toLowerCase();
+    const status = filters?.status || "";
     const opCode = filters?.operationCode || "";
     const opName = filters?.operationName || "";
+    const page = Math.max(1, filters?.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, filters?.pageSize ?? 50));
+    if (keyword) {
+      reports = reports.filter((item) => `${item.orderNo}${item.productName}${item.partCode}${item.partName}${item.operationCode}${item.operationName}${item.operatorName}`.toLowerCase().includes(keyword));
+    }
+    if (orderNo) {
+      reports = reports.filter((item) => item.orderNo.toLowerCase().includes(orderNo));
+    }
+    if (operatorName) {
+      reports = reports.filter((item) => item.operatorName.toLowerCase().includes(operatorName));
+    }
+    if (status) {
+      reports = reports.filter((item) => item.status === status);
+    }
     if (opCode) {
       reports = reports.filter((item) => (item.operationCode || "").includes(opCode));
     }
@@ -486,13 +504,15 @@ export const mockWorkReportRepository: WorkReportRepository = {
         if (filters?.startTime && claimedAt < new Date(filters.startTime)) return false;
         if (filters?.endTime) {
           const endDate = new Date(filters.endTime);
-          endDate.setDate(endDate.getDate() + 1);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(filters.endTime)) endDate.setDate(endDate.getDate() + 1);
           if (claimedAt >= endDate) return false;
         }
         return true;
       });
     }
-    return reports;
+    const total = reports.length;
+    const start = (page - 1) * pageSize;
+    return { items: reports.slice(start, start + pageSize), page, pageSize, total, hasMore: start + pageSize < total };
   },
   async updateReportHours(id, estimatedHours) {
     await delay();

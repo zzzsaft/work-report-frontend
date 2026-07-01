@@ -15,10 +15,9 @@
 
 ## 后端职责
 
-- 登录验证继续请求原后端 `http://hz.jc-times.com:2000/`。
+- 所有后端请求统一使用 `.env` 中的 `VITE_API_BASE_URL`。
 - 登录接口为 `POST /auth/wecom/token`，请求体固定携带 `clientId: "new-frontend"` 和企业微信返回的 `code`；用户校验接口为 `GET /auth/me`。
-- 后续报工功能使用另一个后端时，必须新增独立的环境变量和 HTTP client，例如 `VITE_WORK_REPORT_API_BASE_URL` 与 `workReportClient`。
-- 不得为了接入报工后端修改 `VITE_AUTH_API_BASE_URL` 或让认证请求改道。
+- 不新增按业务域分流的后端地址环境变量。
 
 ## 代码结构
 

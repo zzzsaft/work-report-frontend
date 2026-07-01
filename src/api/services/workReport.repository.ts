@@ -50,7 +50,11 @@ export interface ReportFilters {
   operationName?: string;
   startTime?: string;
   endTime?: string;
+  page?: number;
+  pageSize?: number;
 }
+
+export type ReportListResponse = PaginatedResult<ReportRecord>;
 
 export interface WorkReportRepository {
   getCapabilities(): Promise<UserCapabilities>;
@@ -73,7 +77,7 @@ export interface WorkReportRepository {
   searchWorkers(keyword: string, page: number, pageSize: number): Promise<{ items: WorkerSummary[]; hasMore: boolean }>;
   getWorkerPermissions(): Promise<WorkerPermission[]>;
   updateWorkerPermission(workerId: string, permissionGroup: PermissionGroup): Promise<WorkerPermission>;
-  getReports(filters?: ReportFilters): Promise<ReportRecord[]>;
+  getReports(filters?: ReportFilters): Promise<ReportListResponse>;
   updateReportHours(id: string, estimatedHours: number): Promise<ReportRecord>;
   getExceptions(): Promise<ProductionException[]>;
   resolveException(id: string): Promise<void>;

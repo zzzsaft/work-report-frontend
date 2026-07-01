@@ -5,12 +5,12 @@
 - **v1 当前版本**：员工登录后可以领取工序、查看工序清单、取消误领工序、查看个人统计；不需要开始、暂停、恢复、完工、拍照或报工记录。
 - **v2 升级版本**：在 v1 基础上恢复完整报工流程，包括当前工序、开始/暂停/恢复/完工、照片、后台报工记录和异常处理。
 
-后端按对应版本提供接口和字段后，前端只需要配置 `VITE_WORK_REPORT_API_BASE_URL` 并将 `VITE_USE_MOCK_DATA=false`，不需要修改页面或 API 代码。
+后端按对应版本提供接口和字段后，前端只需要配置 `VITE_API_BASE_URL` 并将 `VITE_USE_MOCK_DATA=false`，不需要修改页面或 API 代码。
 
 ## 接入边界
 
-- 认证接口仍使用原后端 `http://hz.jc-times.com:2000/`，不要修改 `VITE_AUTH_API_BASE_URL`。
-- v1/v2 业务接口都使用独立后端地址 `VITE_WORK_REPORT_API_BASE_URL`，前端通过 `workReportClient` 请求。
+- 认证、账号和 v1/v2 业务接口统一使用 `VITE_API_BASE_URL`。
+- 前端仍按职责保留 `authClient`、`accountClient` 和 `workReportClient`，但不再使用多个 base URL 环境变量。
 - 每个业务请求都会带 `Authorization: Bearer <token>`，token 来自企业微信登录后的认证服务。
 - 业务后端需要用该 token 识别当前用户，也可以在后端内部调用认证服务校验用户。
 - 本文档字段名全部使用 camelCase，后端请直接返回 camelCase，避免前端增加 DTO 映射。

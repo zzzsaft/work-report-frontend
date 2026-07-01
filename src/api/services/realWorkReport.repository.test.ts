@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { workReportClient } from "@/api/http/workReportClient";
-import type { WorkOrder } from "@/domain/work-report";
+import type { ReportRecord, WorkOrder } from "@/domain/work-report";
 import { realWorkReportRepository } from "./realWorkReport.repository";
 
 const order = (id: string): WorkOrder => ({
@@ -13,6 +13,24 @@ const order = (id: string): WorkOrder => ({
   dueDate: "2026-06-30",
   progress: 0,
   status: "pending",
+});
+
+const report = (id: string): ReportRecord => ({
+  id,
+  orderNo: `WO-${id}`,
+  productName: "产品",
+  partCode: "P-1",
+  partName: "部件",
+  operationCode: "OP-1",
+  operationName: "工序",
+  operatorName: "张师傅",
+  status: "completed",
+  claimedAt: "2026-07-01T08:00:00.000Z",
+  estimatedHours: 1,
+  durationHours: 1,
+  startedAt: "2026-07-01T08:00:00.000Z",
+  completedAt: "2026-07-01T09:00:00.000Z",
+  photos: [],
 });
 
 afterEach(() => {
@@ -34,5 +52,11 @@ describe("real work report repository", () => {
     const get = vi.spyOn(workReportClient, "get").mockResolvedValue({ data: { items: [], page: 2, pageSize: 4, total: 0, hasMore: false } });
     await expect(realWorkReportRepository.searchClaimableProducts("CP-1", 2, 4)).resolves.toMatchObject({ items: [], page: 2, pageSize: 4 });
     expect(get).toHaveBeenCalledWith("/claim/products", { params: { keyword: "CP-1", page: 2, pageSize: 4 } });
+  });
+
+  it("requests admin reports with filters and reads paginated responses", async () => {
+    const get = vi.spyOn(workReportClient, "get").mockResolvedValue({ data: { items: [report("1")], page: 2, pageSize: 50, total: 80, hasMore: false } });
+    await expect(realWorkReportRepository.getReports({ keyword: "OP", page: 2, pageSize: 50 })).resolves.toMatchObject({ items: [report("1")], page: 2, pageSize: 50, total: 80, hasMore: false });
+    expect(get).toHaveBeenCalledWith("/admin/reports", { params: { keyword: "OP", page: 2, pageSize: 50 } });
   });
 });

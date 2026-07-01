@@ -225,7 +225,6 @@ export function ClaimOperationsPage() {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [timesLoading, setTimesLoading] = useState(false);
-  const navigate = useNavigate();
   useEffect(() => { void loadRecentClaimableOperations(); }, [loadRecentClaimableOperations]);
 
   useEffect(() => {
@@ -277,7 +276,7 @@ export function ClaimOperationsPage() {
   return <div className={cx(styles["standard-page"], styles["claim-page"])}>
     <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
-    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimedOperation} startTime={startTime} endTime={endTime} timesLoading={timesLoading} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={(operationId) => { const op = claimOperations.find((o: ClaimableOperation) => o.id === operationId) || recentClaimOperations.find((o: ClaimableOperation) => o.id === operationId); if (op) setClaimedOperation(op); }} onConfirmClaim={handleConfirmClaim} onCancelClaim={handleCancelClaim} onContinue={() => setClaimedOperation(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
+    <ClaimOperationsPanel loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimedOperation} startTime={startTime} endTime={endTime} timesLoading={timesLoading} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={(operationId) => { const op = claimOperations.find((o: ClaimableOperation) => o.id === operationId) || recentClaimOperations.find((o: ClaimableOperation) => o.id === operationId); if (op) setClaimedOperation(op); }} onConfirmClaim={handleConfirmClaim} onCancelClaim={handleCancelClaim} />
   </div>;
 }
 
@@ -286,9 +285,8 @@ function OperationCard({ item, removing, onRemove, v1Status = false }: { item: O
 }
 
 function ClaimOperationsPanel({
-  mode = "v2", loading, products, productPagination, parts, operations, recentOperations = [], claimed, startTime, endTime, timesLoading, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed, onConfirmClaim, onCancelClaim,
+  loading, products, productPagination, parts, operations, recentOperations = [], claimed, startTime, endTime, timesLoading, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onConfirmClaim, onCancelClaim,
 }: {
-  mode?: "v1" | "v2";
   loading: boolean;
   products: ClaimableProduct[];
   productPagination: PaginatedResult<ClaimableProduct>;
@@ -304,9 +302,6 @@ function ClaimOperationsPanel({
   onLoadParts: (productId: string) => Promise<void>;
   onLoadOperations: (partId: string) => Promise<void>;
   onClaim: (operationId: string) => void;
-  onGoStart?: (assignment: OperationAssignment) => Promise<void>;
-  onContinue: () => void;
-  onViewClaimed?: () => void;
   onConfirmClaim: () => void;
   onCancelClaim: () => void;
 }) {

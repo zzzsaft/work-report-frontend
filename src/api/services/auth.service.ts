@@ -85,7 +85,7 @@ export interface CreateWeComUserInput {
   enable?: number;
 }
 
-export interface UpdateWeComUserInput extends Partial<CreateWeComUserInput> {}
+export type UpdateWeComUserInput = Partial<CreateWeComUserInput>;
 
 export interface WeComDepartment {
   id: number;
@@ -216,7 +216,10 @@ export const AuthService = {
   },
 
   async syncWeComUserDepartments(): Promise<unknown> {
-    return (await authClient.post("/auth/admin/wecom/user-departments/sync")).data;
+    return (await authClient.post("/auth/admin/wecom/user-departments/sync", {
+      clientId: "work-report",
+      limit: 10000,
+    })).data;
   },
 
   async createWeComDepartment(

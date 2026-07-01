@@ -2,11 +2,12 @@
 
 ## 系统边界
 
-本项目是一套 React SPA，包含手机报工端和桌面管理端。认证域与报工域严格分离：
+本项目是一套 React SPA，包含手机报工端和桌面管理端。认证域与报工域在代码职责上分离，但统一使用同一个后端地址：
 
-- `authClient` 只访问 `VITE_AUTH_API_BASE_URL`，负责企业微信登录、换取令牌和 `/auth/me` 校验。
-- `workReportClient` 只访问 `VITE_WORK_REPORT_API_BASE_URL`，负责所有工单、工序、报工、统计和后台管理请求。
-- 两个 client 都读取 `auth-storage` 中的 Bearer Token，但互不修改 baseURL。
+- 所有 HTTP client 都读取 `VITE_API_BASE_URL`。
+- `authClient` 负责企业微信登录、换取令牌和 `/auth/me` 校验。
+- `workReportClient` 负责所有工单、工序、报工、统计和后台管理请求。
+- 各 client 都读取 `auth-storage` 中的 Bearer Token，但不再维护多套 baseURL。
 
 ## 分层
 

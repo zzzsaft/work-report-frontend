@@ -6,7 +6,7 @@
 
 ```env
 VITE_USE_MOCK_DATA=true
-VITE_WORK_REPORT_API_BASE_URL=http://localhost:8080/
+VITE_API_BASE_URL=http://localhost:8080/
 ```
 
 Mock 模式不发业务 HTTP 请求，也不触发企业微信登录，便于本地演示。数据保存在浏览器 `localStorage` 的 `work-report-mock-db-v2` 中，刷新页面仍保留操作结果。

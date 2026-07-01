@@ -31,7 +31,11 @@ export const realWorkReportRepository: WorkReportRepository = {
   async searchWorkers(keyword, page, pageSize) { return (await workReportClient.get("/admin/workers", { params: { keyword, page, pageSize } })).data; },
   async getWorkerPermissions() { return (await workReportClient.get("/admin/worker-permissions")).data; },
   async updateWorkerPermission(workerId, permissionGroup) { return (await workReportClient.patch(`/admin/workers/${workerId}/permission`, { permissionGroup })).data; },
-  async getReports(filters) { return (await workReportClient.get("/admin/reports", { params: filters })).data; },
+  async getReports(filters) {
+    const page = Math.max(1, filters?.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, filters?.pageSize ?? 50));
+    return normalizePage((await workReportClient.get("/admin/reports", { params: { ...filters, page, pageSize } })).data, page, pageSize);
+  },
   async updateReportHours(id, estimatedHours) { return (await workReportClient.patch(`/admin/reports/${id}/hours`, { estimatedHours })).data; },
   async getExceptions() { return (await workReportClient.get("/admin/exceptions")).data; },
   async resolveException(id) { await workReportClient.post(`/admin/exceptions/${id}/resolve`); },

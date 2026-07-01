@@ -7,4 +7,4 @@ dist
 test-results/
 playwright-report/
 .env
-.patch
+*.patch
