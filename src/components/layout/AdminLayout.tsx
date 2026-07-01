@@ -4,6 +4,7 @@ import {
   ClipboardList,
   FileClock,
   Gauge,
+  LogOut,
   Menu,
   QrCode,
   Settings,
@@ -20,6 +21,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { canAccessAdminRoute, type AdminRouteKey } from "@/domain/work-report";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
+import { useLogout } from "@/hooks/useLogout";
 import { createXftSsoUrl } from "@/utils/xft";
 import styles from "./AdminLayout.module.less";
 
@@ -49,6 +51,7 @@ function AdminAvatar({ src, name }: { src?: string | null; name: string }) {
 
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
+  const logout = useLogout();
   const capabilities = useWorkReportStore((state) => state.capabilities);
   const { name, avatar, token } = useAuthStore();
   const visibleItems = items.filter(([, routeKey]) => canAccessAdminRoute(capabilities, routeKey as AdminRouteKey));
@@ -96,6 +99,9 @@ export default function AdminLayout() {
           <div className={styles["topbar-actions"]}>
             <a href={createXftSsoUrl("", token)}>进入薪福通</a>
             <a href="/work/claim">打开移动端</a>
+            <button className={styles["logout-button"]} onClick={logout} title="退出登录">
+              <LogOut />
+            </button>
           </div>
         </header>
         <main>
