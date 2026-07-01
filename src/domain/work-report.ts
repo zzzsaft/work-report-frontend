@@ -238,11 +238,17 @@ export interface ReportRecord {
   id: string;
   orderNo: string;
   productName: string;
+  partCode: string;
+  partName: string;
+  operationCode: string;
   operationName: string;
   operatorName: string;
   status: OperationStatus;
-  startedAt: string;
+  claimedAt: string | undefined;
+  estimatedHours: number;
   durationHours: number;
+  startedAt: string | undefined;
+  completedAt: string | undefined;
   photos: EvidencePhoto[];
 }
 

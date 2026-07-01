@@ -41,6 +41,17 @@ export interface PaginatedResult<T> {
   hasMore: boolean;
 }
 
+export interface ReportFilters {
+  keyword?: string;
+  orderNo?: string;
+  operatorName?: string;
+  status?: string;
+  operationCode?: string;
+  operationName?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
 export interface WorkReportRepository {
   getCapabilities(): Promise<UserCapabilities>;
   getCurrentAssignment(): Promise<OperationAssignment | null>;
@@ -62,7 +73,8 @@ export interface WorkReportRepository {
   searchWorkers(keyword: string, page: number, pageSize: number): Promise<{ items: WorkerSummary[]; hasMore: boolean }>;
   getWorkerPermissions(): Promise<WorkerPermission[]>;
   updateWorkerPermission(workerId: string, permissionGroup: PermissionGroup): Promise<WorkerPermission>;
-  getReports(): Promise<ReportRecord[]>;
+  getReports(filters?: ReportFilters): Promise<ReportRecord[]>;
+  updateReportHours(id: string, estimatedHours: number): Promise<ReportRecord>;
   getExceptions(): Promise<ProductionException[]>;
   resolveException(id: string): Promise<void>;
   importLeaderOperations(rows: LeaderImportDraft[]): Promise<LeaderImportResult>;

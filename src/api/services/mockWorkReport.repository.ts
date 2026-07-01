@@ -284,9 +284,9 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
     permissionGroup: index === 0 ? "admin" : index < 4 ? "leader" : "worker",
   })),
   reports: [
-    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", startedAt: "2026-06-22T08:12:00+08:00", durationHours: 6.75, photos: [] },
-    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", operationName: "钻孔", operatorName: "王师傅", status: "running", startedAt: "2026-06-23T09:05:00+08:00", durationHours: 3.4, photos: [] },
-    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", operationName: "精加工 · 铣削", operatorName: "李师傅", status: "paused", startedAt: "2026-06-23T08:20:00+08:00", durationHours: 2.1, photos: [] },
+    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", photos: [] },
+    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, photos: [] },
+    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, photos: [] },
   ],
   exceptions: [
     { id: "ex-001", type: "overtime", title: "工序用时超过计划", detail: "精加工 · 铣削已超过计划工时 45 分钟", orderNo: "WO-20260623-018", createdAt: "2026-06-23T14:20:00+08:00", status: "open" },
@@ -468,7 +468,41 @@ export const mockWorkReportRepository: WorkReportRepository = {
     save(db);
     return updated;
   },
-  async getReports() { await delay(); return load().reports; },
+  async getReports(filters) {
+    await delay();
+    let reports = load().reports;
+    const opCode = filters?.operationCode || "";
+    const opName = filters?.operationName || "";
+    if (opCode) {
+      reports = reports.filter((item) => (item.operationCode || "").includes(opCode));
+    }
+    if (opName) {
+      reports = reports.filter((item) => (item.operationName || "").includes(opName));
+    }
+    if (filters?.startTime || filters?.endTime) {
+      reports = reports.filter((item) => {
+        const claimedAt = item.claimedAt ? new Date(item.claimedAt) : null;
+        if (!claimedAt) return false;
+        if (filters?.startTime && claimedAt < new Date(filters.startTime)) return false;
+        if (filters?.endTime) {
+          const endDate = new Date(filters.endTime);
+          endDate.setDate(endDate.getDate() + 1);
+          if (claimedAt >= endDate) return false;
+        }
+        return true;
+      });
+    }
+    return reports;
+  },
+  async updateReportHours(id, estimatedHours) {
+    await delay();
+    const db = load();
+    const index = db.reports.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error("报工记录不存在");
+    db.reports[index] = { ...db.reports[index], estimatedHours };
+    save(db);
+    return db.reports[index];
+  },
   async getExceptions() { await delay(); return load().exceptions; },
   async resolveException(id) { await delay(); const db = load(); db.exceptions = db.exceptions.map((item) => item.id === id ? { ...item, status: "resolved" } : item); save(db); },
   async importLeaderOperations(rows: LeaderImportDraft[]) {
@@ -551,7 +585,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const db = load();
     const assignment = findAssignment(db, assignmentId);
     db.assignments = db.assignments.filter((item) => item.id !== assignmentId);
-    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, operationName: `${assignment.operationName}（后台移除：${reason}）`, operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", startedAt: nowIso(), durationHours: 0, photos: [] });
+    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), photos: [] });
     save(db);
   },
   async resetDemo(scenario = "running") { await delay(100); save(initialDb(scenario)); },

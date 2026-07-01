@@ -4,7 +4,7 @@ import { registerAllModules } from "handsontable/registry";
 import type Handsontable from "handsontable/base";
 import "handsontable/styles/handsontable.min.css";
 import "handsontable/styles/ht-theme-main.min.css";
-import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Factory, KeyRound, Power, RefreshCw, Save, Search, ShieldCheck, Timer, Trash2, Upload, UserCog, UserPlus, UsersRound, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Check, Clock3, Download, Edit3, Factory, KeyRound, Power, RefreshCw, Save, Search, ShieldCheck, Timer, Trash2, Upload, UserCog, UserPlus, UsersRound, Wrench, X } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AuthService, type AccountRole, type AdminAccount } from "@/api/services/auth.service";
 import { workReportRepository } from "@/api/services/workReport.service";
@@ -270,6 +270,7 @@ export function LeaderImportPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [xftConfig, setXftConfig] = useState<XftConfig>(defaultXftConfig);
+  const [searchKeyword, setSearchKeyword] = useState("");
   const rows = useMemo(() => getImportDraftRows(tableRows), [tableRows]);
   const errors = useMemo(() => validateImportGridRows(tableRows), [tableRows]);
   const errorByCell = useMemo(() => {
@@ -277,6 +278,18 @@ export function LeaderImportPage() {
     errors.forEach((error) => map.set(`${error.row}-${error.column}`, error.message));
     return map;
   }, [errors]);
+
+  const filteredRows = useMemo(() => {
+    if (!searchKeyword.trim()) return tableRows;
+    const keyword = searchKeyword.toLowerCase();
+    return tableRows.filter((row) => 
+      row.productCode.toLowerCase().includes(keyword) ||
+      row.partCode.toLowerCase().includes(keyword) ||
+      row.operationCode.toLowerCase().includes(keyword) ||
+      row.operationName.toLowerCase().includes(keyword)
+    );
+  }, [tableRows, searchKeyword]);
+
   const updateRows = (changes: Handsontable.CellChange[] | null, source: Handsontable.ChangeSource) => {
     if (!changes || source === "loadData") return;
     setMessage("");
@@ -290,6 +303,7 @@ export function LeaderImportPage() {
       return nextRows;
     });
   };
+
   const submit = async () => {
     if (!canImportOperations) {
       setMessage("当前账号没有工序导入权限。");
@@ -306,7 +320,55 @@ export function LeaderImportPage() {
       setSubmitting(false);
     }
   };
-  return <><AdminHeader title="小组长工序导入" description="直接从 Excel 粘贴或在单元格内编辑，格式错误会标红" action={canImportOperations && <button className={cx(styles["admin-primary-action"])} disabled={submitting || !rows.length || errors.length > 0} onClick={() => void submit()}><Upload />确认导入</button>} /><XftConfigPanel onSaved={setXftConfig} /><XftHoursImportPanel salaryPeriod={xftConfig.salaryPeriod} /><section className={cx(styles["admin-panel"], styles["import-panel"])}><div className={cx(styles["import-summary"])}><span>已填写 {rows.length} 行</span>{errors.length > 0 ? <strong className={cx(styles["danger-text"])}>{errors.length} 个单元格需修正</strong> : <strong className={cx(styles["success-text"])}>校验通过</strong>}</div>{message && <div className={cx(styles["admin-message"])}>{message}</div>}<div className={cx(styles["leader-import-sheet"], "ht-theme-main")}><HotTable data={tableRows} columns={importColumns.map((column) => ({ data: column.key, width: column.width }))} colHeaders={importColumns.map((column) => column.title)} rowHeaders={true} height={520} width="100%" stretchH="all" autoWrapRow={true} autoWrapCol={true} minSpareRows={6} manualColumnResize={true} contextMenu={["row_above", "row_below", "remove_row", "---------", "undo", "redo"]} copyPaste={true} comments={true} cells={(row, column) => { const key = importColumns[column]?.key; const error = key ? errorByCell.get(`${row}-${key}`) : undefined; const cellProperties: Handsontable.CellProperties = {} as Handsontable.CellProperties; if (error) { cellProperties.className = "leader-import-invalid"; cellProperties.comment = { value: error }; } return cellProperties; }} afterChange={updateRows} licenseKey="non-commercial-and-evaluation" /></div></section></>;
+
+  return (<>
+    <AdminHeader title="小组长工序导入" description="直接从 Excel 粘贴或在单元格内编辑，格式错误会标红" action={canImportOperations && <button className={cx(styles["admin-primary-action"])} disabled={submitting || !rows.length || errors.length > 0} onClick={() => void submit()}><Upload />确认导入</button>} />
+    <XftConfigPanel onSaved={setXftConfig} />
+    <XftHoursImportPanel salaryPeriod={xftConfig.salaryPeriod} />
+    <section className={cx(styles["admin-panel"], styles["import-panel"])}>
+      <div className={cx(styles["import-header"])}>
+        <div className={cx(styles["import-summary"])}>
+          <span>已填写 {rows.length} 行</span>
+          {errors.length > 0 ? <strong className={cx(styles["danger-text"])}>{errors.length} 个单元格需修正</strong> : <strong className={cx(styles["success-text"])}>校验通过</strong>}
+        </div>
+        <div className={cx(styles["import-search"])}>
+          <SearchBox value={searchKeyword} onChange={setSearchKeyword} placeholder="搜索产品号、部件号、工序号或工序名" />
+          {searchKeyword && <button className={cx(styles["table-action"])} onClick={() => setSearchKeyword("")}><X />清除</button>}
+        </div>
+      </div>
+      {message && <div className={cx(styles["admin-message"])}>{message}</div>}
+      <div className={cx(styles["leader-import-sheet"], "ht-theme-main")}>
+        <HotTable
+          data={filteredRows}
+          columns={importColumns.map((column) => ({ data: column.key, width: column.width }))}
+          colHeaders={importColumns.map((column) => column.title)}
+          rowHeaders={true}
+          height={520}
+          width="100%"
+          stretchH="all"
+          autoWrapRow={true}
+          autoWrapCol={true}
+          minSpareRows={6}
+          manualColumnResize={true}
+          contextMenu={["row_above", "row_below", "remove_row", "---------", "undo", "redo"]}
+          copyPaste={true}
+          comments={true}
+          cells={(row, column) => {
+            const key = importColumns[column]?.key;
+            const error = key ? errorByCell.get(`${row}-${key}`) : undefined;
+            const cellProperties: Handsontable.CellProperties = {} as Handsontable.CellProperties;
+            if (error) {
+              cellProperties.className = "leader-import-invalid";
+              cellProperties.comment = { value: error };
+            }
+            return cellProperties;
+          }}
+          afterChange={updateRows}
+          licenseKey="non-commercial-and-evaluation"
+        />
+      </div>
+    </section>
+  </>);
 }
 
 export function AssignmentAdminPage() {
@@ -358,13 +420,182 @@ export function AssignmentAdminPage() {
 }
 
 export function ReportsPage() {
-  const [search, setSearch] = useState("");
-  const load = useCallback(() => workReportRepository.getReports(), []);
+  const [filters, setFilters] = useState<{
+    keyword: string;
+    orderNo: string;
+    operatorName: string;
+    status: string;
+    startTime: string;
+    endTime: string;
+  }>({ keyword: "", orderNo: "", operatorName: "", status: "", startTime: "", endTime: "" });
+  const [editingId, setEditingId] = useState("");
+  const [editingHours, setEditingHours] = useState("");
+  const [message, setMessage] = useState("");
+  const load = useCallback(() => workReportRepository.getReports(filters), [filters]);
   const { data: reports = [], loading, error, reload } = useAsyncResource<ReportRecord[]>(load);
-  const filtered = reports.filter((item) => `${item.orderNo}${item.operatorName}${item.productName}`.includes(search));
-  if (loading) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" /><section className={cx(styles["admin-panel"])}><LoadingTable /></section></>;
-  if (error) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" /><section className={cx(styles["admin-panel"])}><AdminError message={error} retry={() => void reload()} /></section></>;
-  return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<SearchBox value={search} onChange={setSearch} />} /><section className={cx(styles["admin-panel"])}><div className={cx(styles["table-wrap"])}><table><thead><tr><th>工单与产品</th><th>工序</th><th>报工人员</th><th>开始时间</th><th>累计工时</th><th>状态</th><th>凭证</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong><small>{item.productName}</small></td><td>{item.operationName}</td><td>{item.operatorName}</td><td>{new Date(item.startedAt).toLocaleString("zh-CN")}</td><td>{item.durationHours.toFixed(1)} 小时</td><td><AdminStatus status={item.status} /></td><td><button className={cx(styles["table-action"])}>查看照片</button></td></tr>)}</tbody></table></div></section></>;
+
+  const handleFilterChange = (key: keyof typeof filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleResetFilters = () => {
+    setFilters({ keyword: "", orderNo: "", operatorName: "", status: "", startTime: "", endTime: "" });
+  };
+
+  const handleEditHours = (record: ReportRecord) => {
+    setEditingId(record.id);
+    setEditingHours(String(record.estimatedHours));
+  };
+
+  const handleSaveHours = async (record: ReportRecord) => {
+    const hours = parseFloat(editingHours);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      setMessage("工时必须大于0");
+      return;
+    }
+    try {
+      await workReportRepository.updateReportHours(record.id, hours);
+      setMessage("修改成功");
+      await reload();
+    } catch (err) {
+      setMessage("修改失败");
+      console.error("Failed to update hours:", err);
+    } finally {
+      setEditingId("");
+      setEditingHours("");
+      setTimeout(() => setMessage(""), 3000);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId("");
+    setEditingHours("");
+  };
+
+  const exportToExcel = () => {
+    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "预估工时", "领取人员", "来源", "状态", "领取时间", "实际工时"];
+    const rows = reports.map((item) => [
+      item.orderNo,
+      item.productName,
+      "",
+      item.partCode,
+      item.partName,
+      item.operationCode,
+      item.operationName,
+      1,
+      item.estimatedHours,
+      item.operatorName,
+      "自主领取",
+      statusLabel[item.status as keyof typeof statusLabel] || item.status,
+      item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
+      item.durationHours
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `报工记录_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    setMessage("导出成功");
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  if (loading) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><LoadingTable /></section></>;
+  if (error) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><AdminError message={error} retry={() => void reload()} /></section></>;
+
+  return (<>
+    <AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} onClick={exportToExcel}><Download />导出CSV</button>} />
+    <section className={cx(styles["admin-panel"])}>
+      {message && <div className={cx(styles["reports-message"])}>{message}</div>}
+      <div className={cx(styles["reports-filter"])}>
+        <div className={cx(styles["filter-search"])}>
+          <Search />
+          <input type="text" value={filters.keyword} onChange={(e) => handleFilterChange("keyword", e.target.value)} placeholder="搜索工单、产品、工序或人员" />
+        </div>
+        <div className={cx(styles["filter-input"])}>
+          <label>工单编号</label>
+          <input type="text" value={filters.orderNo} onChange={(e) => handleFilterChange("orderNo", e.target.value)} placeholder="工单编号" />
+        </div>
+        <div className={cx(styles["filter-input"])}>
+          <label>人员姓名</label>
+          <input type="text" value={filters.operatorName} onChange={(e) => handleFilterChange("operatorName", e.target.value)} placeholder="人员姓名" />
+        </div>
+        <div className={cx(styles["filter-select"])}>
+          <label>状态</label>
+          <select value={filters.status} onChange={(e) => handleFilterChange("status", e.target.value)}>
+            <option value="">全部</option>
+            <option value="claimed">待开始</option>
+            <option value="running">进行中</option>
+            <option value="paused">已暂停</option>
+            <option value="completed">已完成</option>
+            <option value="cancelled">已取消</option>
+          </select>
+        </div>
+        <div className={cx(styles["filter-date"])}>
+          <input type="date" value={filters.startTime} onChange={(e) => handleFilterChange("startTime", e.target.value)} />
+          <span>至</span>
+          <input type="date" value={filters.endTime} onChange={(e) => handleFilterChange("endTime", e.target.value)} />
+        </div>
+        <div className={cx(styles["filter-actions"])}>
+          <button className={cx(styles["filter-search-btn"])} onClick={() => void reload()}><Search />搜索</button>
+          <button className={cx(styles["filter-reset-btn"])} onClick={handleResetFilters}>重置</button>
+        </div>
+      </div>
+      <div className={cx(styles["table-wrap"])}>
+        <table className={cx(styles["reports-table"])}>
+          <thead>
+            <tr>
+              <th>工单</th>
+              <th>产品</th>
+              <th>部件</th>
+              <th>工序</th>
+              <th>数量/工时</th>
+              <th>领取人员</th>
+              <th>来源</th>
+              <th>状态</th>
+              <th>领取时间</th>
+              <th>实际工时</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((item) => (<tr key={item.id}>
+              <td><strong>{item.orderNo}</strong></td>
+              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.partCode}</span></div></td>
+              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></td>
+              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></td>
+              <td><div className={cx(styles["cell-with-sub"])}><strong>1</strong><span>{item.estimatedHours}小时</span></div></td>
+              <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
+              <td>自主领取</td>
+              <td><span className={cx(styles["status-tag"], styles[`status-${item.status}`])}>{statusLabel[item.status as keyof typeof statusLabel] || item.status}</span></td>
+              <td>{item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "-"}</td>
+              <td>
+                {editingId === item.id ? (<div className={cx(styles["edit-cell"])}>
+                  <input type="number" min="0" step="0.1" value={editingHours} onChange={(e) => setEditingHours(e.target.value)} />
+                </div>) : (<span className={cx(styles["hours-value"])}>{item.durationHours.toFixed(2)} 小时</span>)}
+              </td>
+              <td>
+                {editingId === item.id ? (<div className={cx(styles["edit-actions"])}>
+                  <button className={cx(styles["table-action"], styles["confirm-btn"])} onClick={() => handleSaveHours(item)}><Check /></button>
+                  <button className={cx(styles["table-action"], styles["cancel-btn"])} onClick={handleCancelEdit}><X /></button>
+                </div>) : (<button className={cx(styles["edit-btn"])} onClick={() => handleEditHours(item)}><Edit3 />修改</button>)}
+              </td>
+            </tr>))}
+            {!reports.length && <tr><td colSpan={11}>没有匹配的报工记录。</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className={cx(styles["reports-pagination"])}>
+        <span>共 {reports.length} 条记录</span>
+        <div className={cx(styles["pagination-buttons"])}>
+          <button className={cx(styles["pagination-btn"])} disabled>上一页</button>
+          <span className={cx(styles["pagination-current"])}>第 1 页</span>
+          <button className={cx(styles["pagination-btn"])} disabled>下一页</button>
+        </div>
+      </div>
+    </section>
+  </>);
 }
 
 export function PeoplePage() {

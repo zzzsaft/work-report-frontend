@@ -13,6 +13,7 @@ import { createImagePreviews, filesToCompletionPhotos, revokeImagePreviews, sele
 import { getErrorMessage } from "@/utils/errors";
 import { openXft } from "@/utils/xft";
 import { useNavigate } from "react-router-dom";
+import { getOperationTimes } from "@/api/http/laborDataClient";
 import styles from "./MobilePages.module.less";
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
@@ -220,13 +221,63 @@ export function ClaimOperationsPage() {
     actionLoading, claimLoading, claimProducts, claimProductsPagination, claimParts, claimOperations, recentClaimOperations, error,
     searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, clearError,
   } = useWorkReportStore();
-  const [claimed, setClaimed] = useState<OperationAssignment | null>(null);
+  const [claimedOperation, setClaimedOperation] = useState<ClaimableOperation | null>(null);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [timesLoading, setTimesLoading] = useState(false);
   const navigate = useNavigate();
   useEffect(() => { void loadRecentClaimableOperations(); }, [loadRecentClaimableOperations]);
+
+  useEffect(() => {
+    if (claimedOperation) {
+      setStartTime("");
+      setEndTime("");
+      setTimesLoading(true);
+
+      const fetchOperationTimes = async () => {
+        try {
+          const jobNum = claimedOperation.orderNo;
+          const assemblySeq = claimedOperation.partNo || "0";
+          const oprSeq = claimedOperation.operationNo || "0";
+
+          const times = await getOperationTimes(jobNum, assemblySeq, oprSeq);
+          setStartTime(times.startTime);
+          setEndTime(times.endTime);
+        } catch {
+          const now = new Date();
+          const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+          setStartTime(nowStr);
+          setEndTime(nowStr);
+        } finally {
+          setTimesLoading(false);
+        }
+      };
+
+      void fetchOperationTimes();
+    }
+  }, [claimedOperation]);
+
+  const handleConfirmClaim = async () => {
+    if (!claimedOperation) return;
+    try {
+      await claimOperation(claimedOperation.id);
+      setClaimedOperation(null);
+      await loadRecentClaimableOperations();
+    } catch (err) {
+      console.error("Failed to claim operation:", err);
+    }
+  };
+
+  const handleCancelClaim = () => {
+    setClaimedOperation(null);
+    setStartTime("");
+    setEndTime("");
+  };
+
   return <div className={cx(styles["standard-page"], styles["claim-page"])}>
     <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
-    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimed} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={async (operationId) => { const assignment = await claimOperation(operationId); if (assignment) setClaimed(assignment); await loadRecentClaimableOperations(); }} onContinue={() => setClaimed(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
+    <ClaimOperationsPanel mode="v1" loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimedOperation} startTime={startTime} endTime={endTime} timesLoading={timesLoading} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={(operationId) => { const op = claimOperations.find((o: ClaimableOperation) => o.id === operationId) || recentClaimOperations.find((o: ClaimableOperation) => o.id === operationId); if (op) setClaimedOperation(op); }} onConfirmClaim={handleConfirmClaim} onCancelClaim={handleCancelClaim} onContinue={() => setClaimedOperation(null)} onViewClaimed={() => navigate("/work/operations", { replace: true })} />
   </div>;
 }
 
@@ -235,7 +286,7 @@ function OperationCard({ item, removing, onRemove, v1Status = false }: { item: O
 }
 
 function ClaimOperationsPanel({
-  mode = "v2", loading, products, productPagination, parts, operations, recentOperations = [], claimed, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed,
+  mode = "v2", loading, products, productPagination, parts, operations, recentOperations = [], claimed, startTime, endTime, timesLoading, onSearch, onLoadRecent, onLoadParts, onLoadOperations, onClaim, onGoStart, onContinue, onViewClaimed, onConfirmClaim, onCancelClaim,
 }: {
   mode?: "v1" | "v2";
   loading: boolean;
@@ -244,15 +295,20 @@ function ClaimOperationsPanel({
   parts: ClaimablePart[];
   operations: ClaimableOperation[];
   recentOperations?: ClaimableOperation[];
-  claimed: OperationAssignment | null;
+  claimed: ClaimableOperation | null;
+  startTime: string;
+  endTime: string;
+  timesLoading: boolean;
   onSearch: (keyword: string, page?: number, pageSize?: number) => Promise<void>;
   onLoadRecent?: () => Promise<void>;
   onLoadParts: (productId: string) => Promise<void>;
   onLoadOperations: (partId: string) => Promise<void>;
-  onClaim: (operationId: string) => Promise<void>;
+  onClaim: (operationId: string) => void;
   onGoStart?: (assignment: OperationAssignment) => Promise<void>;
   onContinue: () => void;
   onViewClaimed?: () => void;
+  onConfirmClaim: () => void;
+  onCancelClaim: () => void;
 }) {
   const [keyword, setKeyword] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ClaimableProduct | null>(null);
@@ -264,6 +320,8 @@ function ClaimOperationsPanel({
   const [searchPage, setSearchPage] = useState(1);
   const [recentDate, setRecentDate] = useState<ClaimRecentDateFilter>("all");
   const [recentStatus, setRecentStatus] = useState<Exclude<ClaimOperationFilter, "claimed">>("available");
+  const [localStartTime, setLocalStartTime] = useState(startTime);
+  const [localEndTime, setLocalEndTime] = useState(endTime);
   const productPageCount = Math.max(1, Math.ceil(productPagination.total / productPagination.pageSize));
   const filteredSearchOperations = operations.filter((item) => filter === "all" ? true : item.status === filter);
   const searchPageCount = Math.max(1, Math.ceil(filteredSearchOperations.length / claimSearchPageSize));
@@ -273,6 +331,12 @@ function ClaimOperationsPanel({
     const matchesStatus = recentStatus === "all" ? true : item.status === "available";
     return matchesDate && matchesStatus;
   });
+
+  useEffect(() => {
+    setLocalStartTime(startTime);
+    setLocalEndTime(endTime);
+  }, [startTime, endTime]);
+
   const search = async () => {
     setSelectedProduct(null);
     setSelectedPart(null);
@@ -314,7 +378,9 @@ function ClaimOperationsPanel({
   }, [dismissedAutoPartId, onLoadOperations, parts, selectedPart, selectedProduct, view]);
   const loadRecent = async () => { await onLoadRecent?.(); };
   const renderOperation = (item: ClaimableOperation) => <article key={item.id} className={item.status !== "available" ? styles.disabled : undefined}><div><strong>{item.operationName}</strong><span className={styles[`claim-status-${item.status}`]}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{formatProductPartCode(item.productCode, item.partCode)}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><button className={styles["primary-button"]} disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</button></article>;
-  if (claimed) return <section className={styles["claim-success"]}><CheckCircle2 /><h2>{mode === "v1" ? "已领取工序" : "已加入工序清单"}</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div>{mode === "v1" ? <button className={styles["primary-button"]} onClick={onViewClaimed}><ClipboardList />查看已领取</button> : <button className={styles["primary-button"]} onClick={() => void onGoStart?.(claimed)}><Play />去开始</button>}<button className={styles["ghost-button"]} onClick={onContinue}>继续领取</button></div></section>;
+
+  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><label className={styles["field-label"]}>开工时间</label><input type="datetime-local" value={localStartTime} onChange={(e) => setLocalStartTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div><div className={styles["time-input-section"]}><label className={styles["field-label"]}>完工时间</label><input type="datetime-local" value={localEndTime} onChange={(e) => setLocalEndTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div></div><div className={styles["claim-actions"]}><button className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</button><button className={styles["primary-button"]} disabled={loading} onClick={onConfirmClaim}><CheckCircle2 />确认领取</button></div></section>;
+
   return <section className={styles["claim-panel"]}>
     <div className={styles["claim-view-tabs"]} aria-label="领取工序视图切换"><button className={view === "search" ? styles.active : undefined} onClick={() => setView("search")}>搜索领取</button><button className={view === "recent" ? styles.active : undefined} onClick={() => setView("recent")}>查看最近</button></div>
     {loading && <div className={styles["claim-loading"]}><span className="spinner" />正在读取...</div>}
