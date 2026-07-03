@@ -30,6 +30,8 @@ const report = (id: string): ReportRecord => ({
   durationHours: 1,
   startedAt: "2026-07-01T08:00:00.000Z",
   completedAt: "2026-07-01T09:00:00.000Z",
+  actualStartAt: "2026-07-01T08:00:00.000Z",
+  actualEndAt: "2026-07-01T09:00:00.000Z",
   photos: [],
 });
 

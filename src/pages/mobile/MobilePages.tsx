@@ -239,14 +239,9 @@ export function ClaimOperationsPage() {
           const assemblySeq = claimedOperation.partNo || "0";
           const oprSeq = claimedOperation.operationNo || "0";
 
-          const times = await getOperationTimes(jobNum, assemblySeq, oprSeq);
+          const times = await getOperationTimes(jobNum, assemblySeq, oprSeq, claimedOperation.estimatedHours);
           setStartTime(times.startTime);
           setEndTime(times.endTime);
-        } catch {
-          const now = new Date();
-          const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-          setStartTime(nowStr);
-          setEndTime(nowStr);
         } finally {
           setTimesLoading(false);
         }
@@ -256,10 +251,10 @@ export function ClaimOperationsPage() {
     }
   }, [claimedOperation]);
 
-  const handleConfirmClaim = async () => {
+  const handleConfirmClaim = async (startAt: string, endAt: string) => {
     if (!claimedOperation) return;
     try {
-      await claimOperation(claimedOperation.id);
+      await claimOperation(claimedOperation.id, { startTime: startAt, endTime: endAt });
       setClaimedOperation(null);
       await loadRecentClaimableOperations();
     } catch (err) {
@@ -302,7 +297,7 @@ function ClaimOperationsPanel({
   onLoadParts: (productId: string) => Promise<void>;
   onLoadOperations: (partId: string) => Promise<void>;
   onClaim: (operationId: string) => void;
-  onConfirmClaim: () => void;
+  onConfirmClaim: (startTime: string, endTime: string) => void;
   onCancelClaim: () => void;
 }) {
   const [keyword, setKeyword] = useState("");
@@ -374,7 +369,7 @@ function ClaimOperationsPanel({
   const loadRecent = async () => { await onLoadRecent?.(); };
   const renderOperation = (item: ClaimableOperation) => <article key={item.id} className={item.status !== "available" ? styles.disabled : undefined}><div><strong>{item.operationName}</strong><span className={styles[`claim-status-${item.status}`]}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{formatProductPartCode(item.productCode, item.partCode)}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><button className={styles["primary-button"]} disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</button></article>;
 
-  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><label className={styles["field-label"]}>开工时间</label><input type="datetime-local" value={localStartTime} onChange={(e) => setLocalStartTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div><div className={styles["time-input-section"]}><label className={styles["field-label"]}>完工时间</label><input type="datetime-local" value={localEndTime} onChange={(e) => setLocalEndTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div></div><div className={styles["claim-actions"]}><button className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</button><button className={styles["primary-button"]} disabled={loading} onClick={onConfirmClaim}><CheckCircle2 />确认领取</button></div></section>;
+  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><label className={styles["field-label"]}>开工时间</label><input type="datetime-local" value={localStartTime} onChange={(e) => setLocalStartTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div><div className={styles["time-input-section"]}><label className={styles["field-label"]}>完工时间</label><input type="datetime-local" value={localEndTime} onChange={(e) => setLocalEndTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div></div><div className={styles["claim-actions"]}><button className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</button><button className={styles["primary-button"]} disabled={loading} onClick={() => onConfirmClaim(localStartTime, localEndTime)}><CheckCircle2 />确认领取</button></div></section>;
 
   return <section className={styles["claim-panel"]}>
     <div className={styles["claim-view-tabs"]} aria-label="领取工序视图切换"><button className={view === "search" ? styles.active : undefined} onClick={() => setView("search")}>搜索领取</button><button className={view === "recent" ? styles.active : undefined} onClick={() => setView("recent")}>查看最近</button></div>

@@ -28,7 +28,8 @@ const assignment = (overrides: Partial<OperationAssignment> = {}): OperationAssi
   partCode: "PART-1", partName: "部件",
   operationCode: "OP-1", operationName: "工序", operationNote: "", plannedQuantity: 1,
   plannedStart: "2026-06-23T08:00:00+08:00", plannedEnd: "2026-06-23T09:00:00+08:00",
-  collaborators: [], source: "assigned", canWorkerRemove: false, status: "assigned", ...overrides,
+  collaborators: [], source: "assigned", canWorkerRemove: false, status: "assigned",
+  actualStartAt: undefined, actualEndAt: undefined, ...overrides,
 });
 
 const capabilities = (overrides: Partial<UserCapabilities> = {}): UserCapabilities => ({

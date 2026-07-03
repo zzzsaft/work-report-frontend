@@ -69,6 +69,8 @@ export interface OperationAssignment {
   source: "assigned" | "self_claimed" | "leader_imported";
   canWorkerRemove: boolean;
   estimatedHours?: number;
+  actualStartAt?: string;
+  actualEndAt?: string;
   claimedAt?: string;
   assignedBy?: { id: string; name: string; role: "leader" | "admin" | "system" };
   status: OperationStatus;
@@ -250,6 +252,8 @@ export interface ReportRecord {
   durationHours: number;
   startedAt: string | undefined;
   completedAt: string | undefined;
+  actualStartAt: string | undefined;
+  actualEndAt: string | undefined;
   photos: EvidencePhoto[];
 }
 

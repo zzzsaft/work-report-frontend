@@ -68,7 +68,7 @@ export interface WorkReportRepository {
   searchClaimableProducts(keyword: string, page: number, pageSize: number): Promise<PaginatedResult<ClaimableProduct>>;
   getClaimableParts(productId: string): Promise<ClaimablePart[]>;
   getClaimableOperations(partId: string): Promise<ClaimableOperation[]>;
-  claimOperation(operationId: string): Promise<OperationAssignment>;
+  claimOperation(operationId: string, input?: { startTime?: string; endTime?: string }): Promise<OperationAssignment>;
   removeClaimedAssignment(assignmentId: string): Promise<void>;
   getStatistics(period: LaborStatistics["period"]): Promise<LaborStatistics>;
   getAttendance(): Promise<DailyAttendance[]>;

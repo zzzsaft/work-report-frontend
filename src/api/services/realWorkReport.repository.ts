@@ -22,7 +22,7 @@ export const realWorkReportRepository: WorkReportRepository = {
   async searchClaimableProducts(keyword, page, pageSize) { return normalizePage((await workReportClient.get("/claim/products", { params: { keyword, page, pageSize } })).data, page, pageSize); },
   async getClaimableParts(productId) { return sortByNumericCode((await workReportClient.get(`/claim/products/${productId}/parts`)).data, (item) => item.partNo); },
   async getClaimableOperations(partId) { return sortByNumericCode((await workReportClient.get(`/claim/parts/${partId}/operations`)).data, (item) => item.operationNo); },
-  async claimOperation(operationId) { return (await workReportClient.post(`/claim/operations/${operationId}/claim`)).data; },
+  async claimOperation(operationId, input) { return (await workReportClient.post(`/claim/operations/${operationId}/claim`, input)).data; },
   async removeClaimedAssignment(assignmentId) { await workReportClient.delete(`/assignments/${assignmentId}/claim`); },
   async getStatistics(period) { return (await workReportClient.get("/statistics/me", { params: { period } })).data; },
   async getAttendance() { return (await workReportClient.get("/attendance/me")).data; },

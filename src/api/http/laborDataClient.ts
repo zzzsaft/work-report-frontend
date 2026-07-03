@@ -31,46 +31,63 @@ export async function getLaborData(jobNum: string, assemblySeq: number | string,
   return response.data;
 }
 
-export async function getOperationTimes(jobNum: string, assemblySeq: string | number, oprSeq: string | number): Promise<{ startTime: string; endTime: string }> {
+const formatDateTimeLocalFromDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const parseLaborDateTime = (dateStr: string | null | undefined): Date | null => {
+  if (!dateStr || dateStr.trim() === "") return null;
+  const normalized = dateStr.replace(/\s+/g, "");
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/**
+ * 获取工序开工/完工时间。
+ * - 接口返回有效数据时，使用接口返回的 indate/outdate
+ * - 接口无内容或调用失败时：完工时间取当前时间，开工时间 = 当前时间 - 标准工时
+ */
+export async function getOperationTimes(
+  jobNum: string,
+  assemblySeq: string | number,
+  oprSeq: string | number,
+  estimatedHours?: number
+): Promise<{ startTime: string; endTime: string }> {
+  const now = new Date();
+  const stdMs = Math.max(0, estimatedHours ?? 0) * 3600_000;
+
+  const fallbackByStdHours = () => {
+    const endTime = formatDateTimeLocalFromDate(now);
+    const start = new Date(now.getTime() - stdMs);
+    return { startTime: formatDateTimeLocalFromDate(start), endTime };
+  };
+
   try {
     const laborData = await getLaborData(jobNum, assemblySeq, oprSeq);
 
-    const formatDateTimeLocal = (dateStr: string | null): string => {
-      if (!dateStr || dateStr.trim() === "") return "";
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return "";
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    };
-
     if (!laborData || laborData.length === 0) {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const day = String(now.getDate()).padStart(2, "0");
-      const hours = String(now.getHours()).padStart(2, "0");
-      const minutes = String(now.getMinutes()).padStart(2, "0");
-      const nowStr = `${year}-${month}-${day}T${hours}:${minutes}`;
-      return { startTime: nowStr, endTime: nowStr };
+      return fallbackByStdHours();
     }
 
     const data = laborData[0];
+    const startDate = parseLaborDateTime(data.indate);
+    const endDate = parseLaborDateTime(data.outdate);
+
+    // 接口返回了记录但时间为空，按标准工时计算
+    if (!startDate && !endDate) {
+      return fallbackByStdHours();
+    }
+
     return {
-      startTime: formatDateTimeLocal(data.indate),
-      endTime: formatDateTimeLocal(data.outdate),
+      startTime: startDate ? formatDateTimeLocalFromDate(startDate) : "",
+      endTime: endDate ? formatDateTimeLocalFromDate(endDate) : "",
     };
   } catch {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const nowStr = `${year}-${month}-${day}T${hours}:${minutes}`;
-    return { startTime: nowStr, endTime: nowStr };
+    return fallbackByStdHours();
   }
 }

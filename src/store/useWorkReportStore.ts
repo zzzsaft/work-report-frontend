@@ -33,7 +33,7 @@ interface WorkReportState {
   loadRecentClaimableOperations: () => Promise<void>;
   loadClaimableParts: (productId: string) => Promise<void>;
   loadClaimableOperations: (partId: string) => Promise<void>;
-  claimOperation: (operationId: string) => Promise<OperationAssignment | null>;
+  claimOperation: (operationId: string, input?: { startTime?: string; endTime?: string }) => Promise<OperationAssignment | null>;
   removeClaimedAssignment: (assignmentId: string) => Promise<void>;
   start: () => Promise<void>;
   pause: (reason?: string) => Promise<void>;
@@ -187,11 +187,11 @@ export const useWorkReportStore = create<WorkReportState>((set, get) => {
       catch (error) { set({ error: getErrorMessage(error) }); }
       finally { set({ claimLoading: false }); }
     },
-    claimOperation: async (operationId) => {
+    claimOperation: async (operationId, input) => {
       if (get().actionLoading) return null;
       set({ actionLoading: true, error: null });
       try {
-        const assignment = await workReportRepository.claimOperation(operationId);
+        const assignment = await workReportRepository.claimOperation(operationId, input);
         const assignments = await workReportRepository.getAssignments();
         set({ assignments, switchCandidates: getCurrentSwitchCandidatesForDate(assignments, new Date(), get().current?.id), dayCompleted: false });
         return assignment;

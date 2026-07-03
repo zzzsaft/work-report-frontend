@@ -181,6 +181,7 @@ interface MockDb {
 
 const baseAssignment = (status: "assigned" | "running" | "paused" = "running"): OperationAssignment => {
   const started = new Date(Date.now() - 2 * 3600_000 - 16 * 60_000 - 38_000).toISOString();
+  const now = new Date();
   return {
     id: "assignment-001",
     workOrderId: "order-001",
@@ -201,6 +202,8 @@ const baseAssignment = (status: "assigned" | "running" | "paused" = "running"): 
     estimatedHours: 7.5,
     assignedBy: { id: "leader-01", name: "周组长", role: "leader" },
     status,
+    actualStartAt: status !== "assigned" ? started : undefined,
+    actualEndAt: status === "assigned" ? undefined : new Date(now.getTime() + 5 * 3600_000).toISOString(),
     session: status === "assigned" ? undefined : {
       id: "session-001",
       assignmentId: "assignment-001",
@@ -240,6 +243,8 @@ const completedAssignment = (id: string, daysAgo: number, operationCode: string,
     plannedStart,
     plannedEnd: `${dateKey}T16:30:00+08:00`,
     status: "completed",
+    actualStartAt: plannedStart,
+    actualEndAt: completedAt,
     session: {
       id: `session-${id}`,
       assignmentId: id,
@@ -260,7 +265,7 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
     baseAssignment(scenario),
     { ...baseAssignment("assigned"), id: "assignment-002", operationCode: "OP-040", operationName: "钻孔 · 攻丝", operationNote: "使用M8丝锥，完工后逐件清理铁屑。", plannedStart: todayStart(14), plannedEnd: todayEnd(16), collaborators: ["张师傅"], session: undefined },
     { ...baseAssignment("assigned"), id: "assignment-004", operationCode: "OP-050", operationName: "去毛刺 · 清洗", operationNote: "重点检查孔口和边缘，清洗后擦干并整齐摆放。", plannedStart: todayStart(16), plannedEnd: todayEnd(17, 30), collaborators: ["张师傅", "赵师傅"], session: undefined },
-    { ...baseAssignment("assigned"), id: "assignment-003", orderNo: "WO-20260622-011", productCode: "CP-ZC-240622-03", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "轴体", operationName: "粗加工 · 车削", status: "completed", plannedStart: "2026-06-22T08:00:00+08:00", plannedEnd: "2026-06-22T16:30:00+08:00", session: { ...baseAssignment("running").session!, id: "session-003", status: "completed", accumulatedSeconds: 24300, currentRunStartedAt: undefined, completedAt: "2026-06-22T16:10:00+08:00", photos: [{ id: "photo-1", name: "完工照片.jpg", url: "", uploadedAt: "2026-06-22T16:10:00+08:00" }] } },
+    { ...baseAssignment("assigned"), id: "assignment-003", orderNo: "WO-20260622-011", productCode: "CP-ZC-240622-03", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "轴体", operationName: "粗加工 · 车削", status: "completed", plannedStart: "2026-06-22T08:00:00+08:00", plannedEnd: "2026-06-22T16:30:00+08:00", actualStartAt: "2026-06-22T08:00:00+08:00", actualEndAt: "2026-06-22T16:10:00+08:00", session: { ...baseAssignment("running").session!, id: "session-003", status: "completed", accumulatedSeconds: 24300, currentRunStartedAt: undefined, completedAt: "2026-06-22T16:10:00+08:00", photos: [{ id: "photo-1", name: "完工照片.jpg", url: "", uploadedAt: "2026-06-22T16:10:00+08:00" }] } },
     completedAssignment("history-004", 2, "OP-020", "半精车削", "CP-ZC-240621-02", "传动轴"),
     completedAssignment("history-005", 3, "OP-030", "键槽铣削", "CP-ZC-240620-08", "花键轴"),
     completedAssignment("history-006", 4, "OP-010", "下料检验", "CP-FL-240619-01", "连接法兰"),
@@ -284,9 +289,9 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
     permissionGroup: index === 0 ? "admin" : index < 4 ? "leader" : "worker",
   })),
   reports: [
-    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", photos: [] },
-    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, photos: [] },
-    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, photos: [] },
+    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", actualStartAt: "2026-06-22T08:12:00+08:00", actualEndAt: "2026-06-22T15:30:00+08:00", photos: [] },
+    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T09:05:00+08:00", actualEndAt: undefined, photos: [] },
+    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T08:20:00+08:00", actualEndAt: undefined, photos: [] },
   ],
   exceptions: [
     { id: "ex-001", type: "overtime", title: "工序用时超过计划", detail: "精加工 · 铣削已超过计划工时 45 分钟", orderNo: "WO-20260623-018", createdAt: "2026-06-23T14:20:00+08:00", status: "open" },
@@ -352,6 +357,8 @@ const createAssignmentFromPool = (operation: ClaimableOperation, source: Operati
   claimedAt: source === "self_claimed" ? nowIso() : undefined,
   assignedBy: source === "self_claimed" ? undefined : { id: "admin-01", name: "生产管理员", role: "admin" },
   status: "assigned",
+  actualStartAt: undefined,
+  actualEndAt: undefined,
 });
 
 export const mockWorkReportRepository: WorkReportRepository = {
@@ -405,7 +412,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
   },
   async getClaimableParts(productId) { await delay(); return sortByNumericCode(load().claimParts.filter((item) => item.productId === productId), (item) => item.partNo); },
   async getClaimableOperations(partId) { await delay(); return sortByNumericCode(load().claimOperations.filter((item) => item.partId === partId), (item) => item.operationNo); },
-  async claimOperation(operationId) {
+  async claimOperation(operationId, input) {
     await delay();
     const db = load();
     const operation = db.claimOperations.find((item) => item.id === operationId);
@@ -413,7 +420,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     if (operation.maxClaimWorkers && operation.claimedWorkers >= operation.maxClaimWorkers) throw new Error("该工序领取人数已满");
     const duplicate = db.assignments.some((item) => item.operationCode === operation.operationCode && item.partCode === operation.partCode && item.productCode === operation.productCode && item.status !== "cancelled");
     if (duplicate) throw new Error("你已经有这道工序，不能重复领取");
-    const assignment = createAssignmentFromPool(operation, "self_claimed");
+    const assignment = { ...createAssignmentFromPool(operation, "self_claimed"), actualStartAt: input?.startTime, actualEndAt: input?.endTime };
     db.assignments.unshift(assignment);
     db.claimOperations = db.claimOperations.map((item) => {
       if (item.id !== operationId) return item;
@@ -605,7 +612,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const db = load();
     const assignment = findAssignment(db, assignmentId);
     db.assignments = db.assignments.filter((item) => item.id !== assignmentId);
-    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), photos: [] });
+    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), actualStartAt: assignment.actualStartAt, actualEndAt: assignment.actualEndAt, photos: [] });
     save(db);
   },
   async resetDemo(scenario = "running") { await delay(100); save(initialDb(scenario)); },

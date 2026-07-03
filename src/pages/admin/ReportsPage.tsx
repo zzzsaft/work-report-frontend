@@ -82,7 +82,7 @@ export default function ReportsPage() {
   };
 
   const exportToExcel = () => {
-    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "预估工时", "领取人员", "来源", "状态", "领取时间", "实际工时"];
+    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "预估工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
     const rows = reports.map((item) => [
       item.orderNo,
       item.productName,
@@ -95,7 +95,8 @@ export default function ReportsPage() {
       item.estimatedHours,
       item.operatorName,
       "自主领取",
-      statusLabel[item.status as keyof typeof statusLabel] || item.status,
+      item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "",
+      item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "",
       item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
       item.durationHours
     ]);
@@ -170,7 +171,8 @@ export default function ReportsPage() {
               <th>数量/工时</th>
               <th>领取人员</th>
               <th>来源</th>
-              <th>状态</th>
+              <th>开工时间</th>
+              <th>完工时间</th>
               <th>领取时间</th>
               <th>实际工时</th>
               <th>操作</th>
@@ -185,7 +187,8 @@ export default function ReportsPage() {
               <td><div className={cx(styles["cell-with-sub"])}><strong>1</strong><span>{item.estimatedHours}小时</span></div></td>
               <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
               <td>自主领取</td>
-              <td><span className={cx(styles["status-tag"], styles[`status-${item.status}`])}>{statusLabel[item.status as keyof typeof statusLabel] || item.status}</span></td>
+              <td>{item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "-"}</td>
+              <td>{item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "-"}</td>
               <td>{item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "-"}</td>
               <td>
                 {editingId === item.id ? (<div className={cx(styles["edit-cell"])}>
@@ -199,7 +202,7 @@ export default function ReportsPage() {
                 </div>) : (<button className={cx(styles["edit-btn"])} onClick={() => handleEditHours(item)}><Edit3 />修改</button>)}
               </td>
             </tr>))}
-            {!reports.length && <tr><td colSpan={11}>没有匹配的报工记录。</td></tr>}
+            {!reports.length && <tr><td colSpan={12}>没有匹配的报工记录。</td></tr>}
           </tbody>
         </table>
       </div>
