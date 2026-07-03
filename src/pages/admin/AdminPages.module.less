@@ -494,6 +494,12 @@
 
 .xft-section-head > div { display: flex; align-items: center; gap: 8px; }
 
+.allocation-summary { display: inline-flex; align-items: center; gap: 6px; color: #92400e; font-size: 12px; font-weight: 700; }
+
+.allocation-summary > span,.allocation-tag { display: inline-flex; width: fit-content; align-items: center; border-radius: 999px; padding: 3px 8px;
+  color: #9a3412;
+  background: #ffedd5; font-size: 12px; font-weight: 800; white-space: nowrap; }
+
 .table-action svg { width: 16px; vertical-align: middle; margin-right: 4px; }
 
 .table-wrap.compact table { white-space: normal; }
@@ -628,6 +634,11 @@
 
 .table-wrap .reports-table .cell-with-sub span { font-size: 12px;
   color: #64748b; display: block; margin-top: 0; }
+
+.table-wrap .reports-table .hours-allocation-cell { min-width: 118px; }
+
+.table-wrap .reports-table .hours-allocation-cell em { margin-top: 4px;
+  color: #b45309; font-size: 12px; font-style: normal; line-height: 1.35; }
 
 .table-wrap .reports-table .operator-cell { font-weight: 600;
   color: #1e293b; }

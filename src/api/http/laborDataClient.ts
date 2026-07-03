@@ -42,7 +42,7 @@ const formatDateTimeLocalFromDate = (date: Date): string => {
 
 const parseLaborDateTime = (dateStr: string | null | undefined): Date | null => {
   if (!dateStr || dateStr.trim() === "") return null;
-  const normalized = dateStr.replace(/\s+/g, "");
+  const normalized = dateStr.trim().replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/, "$1T$2");
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
 };

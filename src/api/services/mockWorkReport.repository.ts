@@ -35,7 +35,7 @@ const dateKey = (date: Date | string) => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 };
 const assignmentStatDate = (assignment: OperationAssignment) => assignment.claimedAt || assignment.plannedStart;
-const assignmentStatHours = (assignment: OperationAssignment) => assignment.estimatedHours || 0;
+const assignmentStatHours = (assignment: OperationAssignment) => assignment.allocatedHours ?? assignment.estimatedHours ?? 0;
 const weekStart = (date: Date) => {
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
@@ -83,7 +83,8 @@ const buildClaimedStatistics = (assignments: OperationAssignment[], period: Labo
       }).reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
       return { label: `${now.getMonth() + 1}月第${index + 1}周`, hours, overtime: 0 };
     });
-  return { period, totalHours, regularHours: totalHours, overtimeHours: 0, completedOperations: counted.length, attendanceDays, trend };
+  const hourAllocation = counted.find((assignment) => assignment.hourAllocation)?.hourAllocation;
+  return { period, totalHours, regularHours: totalHours, overtimeHours: 0, completedOperations: counted.length, attendanceDays, trend, hourAllocation };
 };
 
 const defaultXftConfig = (): XftConfig => ({
@@ -124,16 +125,22 @@ const previewMockXftHours = (): XftHoursRow[] => {
       const staffNumber = assignment.assignedBy?.id || "EMP-20240018";
       const existing = grouped.get(staffNumber);
       if (existing) {
-        existing.hours = roundHours(existing.hours + (assignment.estimatedHours || 0));
+        existing.hours = roundHours(existing.hours + assignmentStatHours(assignment));
+        existing.appliedCount = (existing.appliedCount || 0) + (assignment.hourAllocation?.allocationApplied ? 1 : 0);
+        existing.totalCount = (existing.totalCount || 0) + (assignment.hourAllocation ? 1 : 0);
+        existing.hourAllocation = existing.hourAllocation || assignment.hourAllocation;
         return;
       }
       grouped.set(staffNumber, {
         lineId: grouped.size + 1,
         staffName: assignment.collaborators[0] || "张师傅",
         staffNumber,
-        hours: roundHours(assignment.estimatedHours || 0),
+        hours: roundHours(assignmentStatHours(assignment)),
         identityNumber: "",
         staffId: "",
+        hourAllocation: assignment.hourAllocation,
+        appliedCount: assignment.hourAllocation?.allocationApplied ? 1 : 0,
+        totalCount: assignment.hourAllocation ? 1 : 0,
       });
     });
   return Array.from(grouped.values()).filter((row) => row.hours > 0);
@@ -200,6 +207,16 @@ const baseAssignment = (status: "assigned" | "running" | "paused" = "running"): 
     source: "assigned",
     canWorkerRemove: false,
     estimatedHours: 7.5,
+    allocatedHours: status === "assigned" ? 7.5 : 3.25,
+    originalEstimatedHours: 7.5,
+    hourAllocation: {
+      allocationTemporary: true,
+      allocationApplied: status !== "assigned",
+      allocationMethod: status === "assigned" ? "original_estimated_hours" : "actual_duration_ratio",
+      allocationRatio: status === "assigned" ? undefined : 0.4333,
+      allocationBasisSeconds: status === "assigned" ? undefined : 8198,
+      allocationParticipantCount: 2,
+    },
     assignedBy: { id: "leader-01", name: "周组长", role: "leader" },
     status,
     actualStartAt: status !== "assigned" ? started : undefined,
@@ -289,8 +306,8 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
     permissionGroup: index === 0 ? "admin" : index < 4 ? "leader" : "worker",
   })),
   reports: [
-    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", actualStartAt: "2026-06-22T08:12:00+08:00", actualEndAt: "2026-06-22T15:30:00+08:00", photos: [] },
-    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T09:05:00+08:00", actualEndAt: undefined, photos: [] },
+    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, allocatedHours: 4.75, originalEstimatedHours: 8, hourAllocation: { allocationTemporary: true, allocationApplied: true, allocationMethod: "actual_duration_ratio", allocationRatio: 0.59375, allocationBasisSeconds: 24300, allocationParticipantCount: 2 }, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", actualStartAt: "2026-06-22T08:12:00+08:00", actualEndAt: "2026-06-22T15:30:00+08:00", photos: [] },
+    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, allocatedHours: 4, originalEstimatedHours: 4, hourAllocation: { allocationTemporary: true, allocationApplied: false, allocationMethod: "original_estimated_hours", allocationParticipantCount: 2 }, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T09:05:00+08:00", actualEndAt: undefined, photos: [] },
     { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T08:20:00+08:00", actualEndAt: undefined, photos: [] },
   ],
   exceptions: [
@@ -526,7 +543,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const db = load();
     const index = db.reports.findIndex((item) => item.id === id);
     if (index === -1) throw new Error("报工记录不存在");
-    db.reports[index] = { ...db.reports[index], estimatedHours };
+    db.reports[index] = { ...db.reports[index], estimatedHours, originalEstimatedHours: estimatedHours };
     save(db);
     return db.reports[index];
   },

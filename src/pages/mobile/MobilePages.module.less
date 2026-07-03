@@ -221,6 +221,16 @@
 
 .operation-card dd { margin: 4px 0 0; font-size: 16px; font-weight: 700; }
 
+.allocation-note { margin-top: 12px; border: 1px solid #fed7aa; border-radius: 10px; padding: 10px 12px;
+  background: #fff7ed; }
+
+.allocation-note span,.allocation-tag { display: inline-flex; align-items: center; width: fit-content; border-radius: 999px; padding: 3px 8px;
+  color: #9a3412;
+  background: #ffedd5; font-size: 12px; font-weight: 800; }
+
+.allocation-note p { margin: 7px 0 0;
+  color: #7c2d12; font-size: 13px; line-height: 1.45; }
+
 .assignment-source { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 
 .assignment-source span { border-radius: 999px; padding: 5px 9px;
@@ -238,13 +248,16 @@
 .locked-claim { margin-top: 12px !important;
   color: var(--warning) !important; font-size: 14px !important; }
 
-.stat-hero { display: flex; align-items: baseline; border-radius: 18px; padding: 24px;
+.stat-hero { display: flex; align-items: baseline; gap: 8px; border-radius: 18px; padding: 24px;
   color: #fff;
   background: linear-gradient(135deg, #063379, #0e61d6); box-shadow: 0 12px 26px rgb(8 67 148 / 20%); }
 
 .stat-hero span { align-self: flex-start; font-size: 16px; }
 
 .stat-hero strong { margin-left: auto; font-size: 50px; }
+
+.stat-hero .allocation-tag { color: #fff7ed;
+  background: rgb(255 237 213 / 18%); }
 
 .stat-hero em { margin-left: 5px; font-style: normal; }
 
@@ -548,7 +561,11 @@
 
 .claim-success .time-input-section { display: flex; flex-direction: column; gap: 8px; }
 
-.claim-success .time-input-section > label { font-size: 16px; font-weight: 600; color: var(--navy-900); }
+.claim-success .time-input-section > label,.claim-success .time-input-section > span { font-size: 16px; font-weight: 600; color: var(--navy-900); }
+
+.claim-success .time-picker-row { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 10px; }
+
+.claim-success .time-picker-row label { display: grid; gap: 6px; min-width: 0; color: var(--muted); font-size: 13px; font-weight: 800; }
 
 .claim-success .time-input { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; font-size: 16px; }
 

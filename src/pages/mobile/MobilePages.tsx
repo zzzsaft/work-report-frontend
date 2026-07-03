@@ -7,7 +7,7 @@ import {
 import { useLogout } from "@/hooks/useLogout";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
-import { canSwitchFromAssignment, canWorkerRemoveAssignment, formatDuration, getSessionElapsedSeconds, statusLabel, type ClaimableOperation, type ClaimablePart, type ClaimableProduct, type OperationAssignment } from "@/domain/work-report";
+import { canSwitchFromAssignment, canWorkerRemoveAssignment, formatDuration, formatHours, getAllocatedHours, getOriginalEstimatedHours, getSessionElapsedSeconds, hourAllocationFallbackText, hourAllocationTooltip, statusLabel, type ClaimableOperation, type ClaimablePart, type ClaimableProduct, type OperationAssignment } from "@/domain/work-report";
 import type { PaginatedResult } from "@/api/services/workReport.repository";
 import { createImagePreviews, filesToCompletionPhotos, revokeImagePreviews, selectImageFiles, type ImagePreview } from "@/utils/imageFiles";
 import { getErrorMessage } from "@/utils/errors";
@@ -64,6 +64,11 @@ const isAssignmentInRange = (item: OperationAssignment, range: OperationListRang
   if (range === "all") return true;
   return time >= Date.now() - Number(range) * 24 * 3600_000;
 };
+const splitDateTimeLocal = (value: string) => {
+  const [date = "", time = ""] = value.split("T");
+  return { date, time: time.slice(0, 5) };
+};
+const combineDateTimeLocal = (date: string, time: string) => date && time ? `${date}T${time}` : "";
 
 function BottomSheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return <div className={styles["sheet-backdrop"]} role="presentation" onMouseDown={onClose}>
@@ -228,31 +233,38 @@ export function ClaimOperationsPage() {
   useEffect(() => { void loadRecentClaimableOperations(); }, [loadRecentClaimableOperations]);
 
   useEffect(() => {
-    if (claimedOperation) {
-      setStartTime("");
-      setEndTime("");
-      setTimesLoading(true);
-
-      const fetchOperationTimes = async () => {
-        try {
-          const jobNum = claimedOperation.orderNo;
-          const assemblySeq = claimedOperation.partNo || "0";
-          const oprSeq = claimedOperation.operationNo || "0";
-
-          const times = await getOperationTimes(jobNum, assemblySeq, oprSeq, claimedOperation.estimatedHours);
-          setStartTime(times.startTime);
-          setEndTime(times.endTime);
-        } finally {
-          setTimesLoading(false);
-        }
-      };
-
-      void fetchOperationTimes();
+    if (!claimedOperation) {
+      setTimesLoading(false);
+      return;
     }
+
+    let cancelled = false;
+    setStartTime("");
+    setEndTime("");
+    setTimesLoading(true);
+
+    const fetchOperationTimes = async () => {
+      try {
+        const jobNum = claimedOperation.orderNo;
+        const assemblySeq = claimedOperation.partNo || "0";
+        const oprSeq = claimedOperation.operationNo || "0";
+
+        const times = await getOperationTimes(jobNum, assemblySeq, oprSeq, claimedOperation.estimatedHours);
+        if (cancelled) return;
+        setStartTime(times.startTime);
+        setEndTime(times.endTime);
+      } finally {
+        if (!cancelled) setTimesLoading(false);
+      }
+    };
+
+    void fetchOperationTimes();
+    return () => { cancelled = true; };
   }, [claimedOperation]);
 
   const handleConfirmClaim = async (startAt: string, endAt: string) => {
     if (!claimedOperation) return;
+    if (!startAt || !endAt || new Date(startAt).getTime() > new Date(endAt).getTime()) return;
     try {
       await claimOperation(claimedOperation.id, { startTime: startAt, endTime: endAt });
       setClaimedOperation(null);
@@ -276,7 +288,9 @@ export function ClaimOperationsPage() {
 }
 
 function OperationCard({ item, removing, onRemove, v1Status = false }: { item: OperationAssignment; removing: boolean; onRemove: () => void; v1Status?: boolean }) {
-  return <article className={styles["operation-card"]}><div>{v1Status ? <span className={cx(styles["status-pill"], styles["status-assigned"])}><span />已领取</span> : <StatusPill status={item.status} />}<span className={styles["order-number"]}>{item.orderNo}</span></div><h2>{item.operationName}</h2><p>{item.productName} · {item.productCode}</p><p>{item.partName || item.partCode} · {item.partCode}</p><div className={styles["assignment-source"]}><span>{item.source === "self_claimed" ? "自主领取" : item.source === "leader_imported" ? "小组长导入" : "后台分配"}</span>{item.assignedBy && <small>{item.assignedBy.name}</small>}</div><dl><div><dt>计划数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>计划工时</dt><dd>{item.estimatedHours ? `${item.estimatedHours} 小时` : "未填写"}</dd></div></dl>{canWorkerRemoveAssignment(item) && <button className={styles["remove-claim-button"]} disabled={removing} onClick={onRemove}><Trash2 />取消领取</button>}</article>;
+  const allocation = item.hourAllocation;
+  const hasAllocation = !!allocation;
+  return <article className={styles["operation-card"]}><div>{v1Status ? <span className={cx(styles["status-pill"], styles["status-assigned"])}><span />已领取</span> : <StatusPill status={item.status} />}<span className={styles["order-number"]}>{item.orderNo}</span></div><h2>{item.operationName}</h2><p>{item.productName} · {item.productCode}</p><p>{item.partName || item.partCode} · {item.partCode}</p><div className={styles["assignment-source"]}><span>{item.source === "self_claimed" ? "自主领取" : item.source === "leader_imported" ? "小组长导入" : "后台分配"}</span>{item.assignedBy && <small>{item.assignedBy.name}</small>}</div><dl><div><dt>计划数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>{hasAllocation ? "分摊工时" : "计划工时"}</dt><dd>{hasAllocation ? `${formatHours(getAllocatedHours(item))} 小时` : item.estimatedHours ? `${formatHours(item.estimatedHours)} 小时` : "未填写"}</dd></div>{hasAllocation && <div><dt>原标准工时</dt><dd>{formatHours(getOriginalEstimatedHours(item))} 小时</dd></div>}</dl>{allocation?.allocationTemporary && <div className={styles["allocation-note"]} title={hourAllocationTooltip}><span>临时分摊</span><p>{allocation.allocationApplied === false ? hourAllocationFallbackText : "当前工时按实际开工-完工时长占比分摊，属于临时分摊口径，后续规则可能调整。"}</p></div>}{canWorkerRemoveAssignment(item) && <button className={styles["remove-claim-button"]} disabled={removing} onClick={onRemove}><Trash2 />取消领取</button>}</article>;
 }
 
 function ClaimOperationsPanel({
@@ -310,8 +324,16 @@ function ClaimOperationsPanel({
   const [searchPage, setSearchPage] = useState(1);
   const [recentDate, setRecentDate] = useState<ClaimRecentDateFilter>("all");
   const [recentStatus, setRecentStatus] = useState<Exclude<ClaimOperationFilter, "claimed">>("available");
-  const [localStartTime, setLocalStartTime] = useState(startTime);
-  const [localEndTime, setLocalEndTime] = useState(endTime);
+  const initialStart = splitDateTimeLocal(startTime);
+  const initialEnd = splitDateTimeLocal(endTime);
+  const [localStartDate, setLocalStartDate] = useState(initialStart.date);
+  const [localStartClock, setLocalStartClock] = useState(initialStart.time);
+  const [localEndDate, setLocalEndDate] = useState(initialEnd.date);
+  const [localEndClock, setLocalEndClock] = useState(initialEnd.time);
+  const localStartTime = combineDateTimeLocal(localStartDate, localStartClock);
+  const localEndTime = combineDateTimeLocal(localEndDate, localEndClock);
+  const timeInvalid = Boolean(localStartTime && localEndTime && new Date(localStartTime).getTime() > new Date(localEndTime).getTime());
+  const canConfirmClaim = !loading && !timesLoading && !!localStartTime && !!localEndTime && !timeInvalid;
   const productPageCount = Math.max(1, Math.ceil(productPagination.total / productPagination.pageSize));
   const filteredSearchOperations = operations.filter((item) => filter === "all" ? true : item.status === filter);
   const searchPageCount = Math.max(1, Math.ceil(filteredSearchOperations.length / claimSearchPageSize));
@@ -323,8 +345,12 @@ function ClaimOperationsPanel({
   });
 
   useEffect(() => {
-    setLocalStartTime(startTime);
-    setLocalEndTime(endTime);
+    const nextStart = splitDateTimeLocal(startTime);
+    const nextEnd = splitDateTimeLocal(endTime);
+    setLocalStartDate(nextStart.date);
+    setLocalStartClock(nextStart.time);
+    setLocalEndDate(nextEnd.date);
+    setLocalEndClock(nextEnd.time);
   }, [startTime, endTime]);
 
   const search = async () => {
@@ -369,7 +395,7 @@ function ClaimOperationsPanel({
   const loadRecent = async () => { await onLoadRecent?.(); };
   const renderOperation = (item: ClaimableOperation) => <article key={item.id} className={item.status !== "available" ? styles.disabled : undefined}><div><strong>{item.operationName}</strong><span className={styles[`claim-status-${item.status}`]}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{formatProductPartCode(item.productCode, item.partCode)}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><button className={styles["primary-button"]} disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</button></article>;
 
-  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><label className={styles["field-label"]}>开工时间</label><input type="datetime-local" value={localStartTime} onChange={(e) => setLocalStartTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div><div className={styles["time-input-section"]}><label className={styles["field-label"]}>完工时间</label><input type="datetime-local" value={localEndTime} onChange={(e) => setLocalEndTime(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></div></div><div className={styles["claim-actions"]}><button className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</button><button className={styles["primary-button"]} disabled={loading} onClick={() => onConfirmClaim(localStartTime, localEndTime)}><CheckCircle2 />确认领取</button></div></section>;
+  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><span className={styles["field-label"]}>开工时间</span><div className={styles["time-picker-row"]}><label><span>日期</span><input type="date" value={localStartDate} onChange={(e) => setLocalStartDate(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label><label><span>时间</span><input type="time" step={300} value={localStartClock} onChange={(e) => setLocalStartClock(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label></div></div><div className={styles["time-input-section"]}><span className={styles["field-label"]}>完工时间</span><div className={styles["time-picker-row"]}><label><span>日期</span><input type="date" value={localEndDate} onChange={(e) => setLocalEndDate(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label><label><span>时间</span><input type="time" step={300} value={localEndClock} onChange={(e) => setLocalEndClock(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label></div></div></div>{timesLoading && <p className={styles["validation-hint"]}>正在读取开完工时间...</p>}{!timesLoading && (!localStartTime || !localEndTime) && <p className={styles["validation-hint"]}>请填写开工时间和完工时间</p>}{timeInvalid && <p className={styles["validation-hint"]}>开工时间不能晚于完工时间</p>}<div className={styles["claim-actions"]}><button className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</button><button className={styles["primary-button"]} disabled={!canConfirmClaim} onClick={() => { if (canConfirmClaim) onConfirmClaim(localStartTime, localEndTime); }}><CheckCircle2 />确认领取</button></div></section>;
 
   return <section className={styles["claim-panel"]}>
     <div className={styles["claim-view-tabs"]} aria-label="领取工序视图切换"><button className={view === "search" ? styles.active : undefined} onClick={() => setView("search")}>搜索领取</button><button className={view === "recent" ? styles.active : undefined} onClick={() => setView("recent")}>查看最近</button></div>
@@ -400,7 +426,8 @@ export function StatsPage() {
   const maxTrendHours = Math.max(10, ...(statistics?.trend.map((item) => item.hours) || []));
   const trendTitle = period === "month" ? "每周工时" : "每日工时";
   const trendSubtitle = period === "month" ? "本月按周汇总" : "本周";
-  return <div className={styles["standard-page"]}><PageHeader title="我的统计" subtitle="已领取工序按计划工时汇总" /><div className={styles["segmented"]}>{([['day','今日'],['week','本周'],['month','本月']] as const).map(([key,label]) => <button key={key} className={period === key ? styles.active : undefined} onClick={()=>setPeriod(key)}>{label}</button>)}</div>{statisticsLoading || !statistics ? <LoadingState /> : <><section className={styles["stat-hero"]}><span>累计工时</span><strong>{statistics.totalHours.toFixed(1)}</strong><em>小时</em></section><div className={styles["metric-grid"]}><Metric icon={Clock3} label="计划工时" value={`${statistics.regularHours.toFixed(1)} 小时`} /><Metric icon={CalendarClock} label="加班工时" value={`${statistics.overtimeHours.toFixed(1)} 小时`} tone="warning" /><Metric icon={CheckCircle2} label="已领工序" value={`${statistics.completedOperations} 道`} /><Metric icon={CalendarClock} label="涉及天数" value={`${statistics.attendanceDays} 天`} /></div>{period === "day" ? <section className={styles["today-stat-note"]}><Clock3 /><div><strong>今日统计只显示汇总</strong><p>当前 v1 口径为领取即计入计划工时，真实报工工时将在后续版本开放。</p></div></section> : <section className={styles["trend-list"]}><div className={styles["trend-heading"]}><div><h2>{trendTitle}</h2><p>{trendSubtitle}</p></div><div className={styles["trend-legend"]} aria-label="工时图例"><span><i className={styles["regular"]} />计划</span><span><i className={styles["overtime"]} />加班</span></div></div>{statistics.trend.map((item) => { const regular = Math.max(0, item.hours - item.overtime); return <div className={styles["trend-row"]} key={item.label}><span>{item.label}</span><div className={styles["stacked-hours"]} aria-label={`${item.label}计划工时 ${regular} 小时，加班 ${item.overtime} 小时`}><i className={styles["regular-hours"]} style={{ width: `${Math.min(regular / maxTrendHours * 100, 100)}%` }} /><i className={styles["overtime-hours"]} style={{ width: `${Math.min(item.overtime / maxTrendHours * 100, 100)}%` }} /></div><div className={styles["trend-value"]}><strong>{item.hours}h</strong>{item.overtime > 0 && <small>加班 {item.overtime}h</small>}</div></div>})}</section>}</>}</div>;
+  const allocation = statistics?.hourAllocation;
+  return <div className={styles["standard-page"]}><PageHeader title="我的统计" subtitle="已领取工序按计划工时汇总" /><div className={styles["segmented"]}>{([['day','今日'],['week','本周'],['month','本月']] as const).map(([key,label]) => <button key={key} className={period === key ? styles.active : undefined} onClick={()=>setPeriod(key)}>{label}</button>)}</div>{statisticsLoading || !statistics ? <LoadingState /> : <><section className={styles["stat-hero"]}><span>累计工时</span>{allocation?.allocationTemporary && <small className={styles["allocation-tag"]} title={hourAllocationTooltip}>临时分摊</small>}<strong>{statistics.totalHours.toFixed(2)}</strong><em>小时</em></section><div className={styles["metric-grid"]}><Metric icon={Clock3} label="计划工时" value={`${statistics.regularHours.toFixed(2)} 小时`} /><Metric icon={CalendarClock} label="加班工时" value={`${statistics.overtimeHours.toFixed(2)} 小时`} tone="warning" /><Metric icon={CheckCircle2} label="已领工序" value={`${statistics.completedOperations} 道`} /><Metric icon={CalendarClock} label="涉及天数" value={`${statistics.attendanceDays} 天`} /></div>{allocation && <section className={styles["today-stat-note"]} title={hourAllocationTooltip}><Clock3 /><div><strong>工时分摊说明 <span className={styles["allocation-tag"]}>临时分摊</span></strong><p>{allocation.allocationApplied === false ? hourAllocationFallbackText : "当前工时按实际开工-完工时长占比分摊标准工时。该规则为临时口径，后续可能调整。"}</p></div></section>}{period === "day" ? <section className={styles["today-stat-note"]}><Clock3 /><div><strong>今日统计只显示汇总</strong><p>当前统计工时由后端返回；如存在多人报工分摊，会按临时分摊口径计入。</p></div></section> : <section className={styles["trend-list"]}><div className={styles["trend-heading"]}><div><h2>{trendTitle}</h2><p>{trendSubtitle}</p></div><div className={styles["trend-legend"]} aria-label="工时图例"><span><i className={styles["regular"]} />计划</span><span><i className={styles["overtime"]} />加班</span></div></div>{statistics.trend.map((item) => { const regular = Math.max(0, item.hours - item.overtime); return <div className={styles["trend-row"]} key={item.label}><span>{item.label}</span><div className={styles["stacked-hours"]} aria-label={`${item.label}计划工时 ${regular.toFixed(2)} 小时，加班 ${item.overtime.toFixed(2)} 小时`}><i className={styles["regular-hours"]} style={{ width: `${Math.min(regular / maxTrendHours * 100, 100)}%` }} /><i className={styles["overtime-hours"]} style={{ width: `${Math.min(item.overtime / maxTrendHours * 100, 100)}%` }} /></div><div className={styles["trend-value"]}><strong>{item.hours.toFixed(2)}h</strong>{item.overtime > 0 && <small>加班 {item.overtime.toFixed(2)}h</small>}</div></div>})}</section>}</>}</div>;
 }
 
 function Metric({ icon: Icon, label, value, tone }: { icon: typeof Clock3; label: string; value: string; tone?: string }) { return <article className={cx(styles["metric-card"], tone && styles[tone])}><Icon /><span>{label}</span><strong>{value}</strong></article>; }

@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 import { Check, Download, Edit3, Search, X } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
-import { statusLabel, type ReportRecord } from "@/domain/work-report";
+import { allocationMethodLabel, formatAllocationBasisHours, formatAllocationRatio, formatHours, getAllocatedHours, getOriginalEstimatedHours, hourAllocationFallbackText, hourAllocationTooltip, statusLabel, type ReportRecord } from "@/domain/work-report";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { AdminError, AdminHeader, LoadingTable } from "./adminShared";
+import { AdminError, AdminHeader, AdminStatus, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
 import styles from "./AdminPages.module.less";
 
@@ -53,7 +53,7 @@ export default function ReportsPage() {
 
   const handleEditHours = (record: ReportRecord) => {
     setEditingId(record.id);
-    setEditingHours(String(record.estimatedHours));
+    setEditingHours(String(getOriginalEstimatedHours(record)));
   };
 
   const handleSaveHours = async (record: ReportRecord) => {
@@ -82,7 +82,7 @@ export default function ReportsPage() {
   };
 
   const exportToExcel = () => {
-    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "预估工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
+    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "分摊工时", "原工时", "领取人员", "来源", "状态", "开工时间", "完工时间", "领取时间", "实际工时"];
     const rows = reports.map((item) => [
       item.orderNo,
       item.productName,
@@ -92,9 +92,11 @@ export default function ReportsPage() {
       item.operationCode,
       item.operationName,
       1,
-      item.estimatedHours,
+      formatHours(getAllocatedHours(item)),
+      formatHours(getOriginalEstimatedHours(item)),
       item.operatorName,
       "自主领取",
+      statusLabel[item.status] || item.status,
       item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "",
       item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "",
       item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
@@ -168,9 +170,11 @@ export default function ReportsPage() {
               <th>产品</th>
               <th>部件</th>
               <th>工序</th>
-              <th>数量/工时</th>
+              <th>分摊工时</th>
+              <th>原工时</th>
               <th>领取人员</th>
               <th>来源</th>
+              <th>状态</th>
               <th>开工时间</th>
               <th>完工时间</th>
               <th>领取时间</th>
@@ -179,14 +183,19 @@ export default function ReportsPage() {
             </tr>
           </thead>
           <tbody>
-            {reports.map((item) => (<tr key={item.id}>
+            {reports.map((item) => {
+              const allocation = item.hourAllocation;
+              const allocationTitle = allocation ? `工时分摊说明\n${hourAllocationTooltip}\n分摊方式：${allocationMethodLabel(allocation.allocationMethod)}\n分摊比例：${formatAllocationRatio(allocation.allocationRatio)}\n实际时长：${formatAllocationBasisHours(allocation.allocationBasisSeconds)}\n参与人数：${allocation.allocationParticipantCount ?? "-"}${allocation.allocationApplied === false ? `\n${hourAllocationFallbackText}` : ""}` : undefined;
+              return (<tr key={item.id}>
               <td><strong>{item.orderNo}</strong></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.partCode}</span></div></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></td>
-              <td><div className={cx(styles["cell-with-sub"])}><strong>1</strong><span>{item.estimatedHours}小时</span></div></td>
+              <td><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <span className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</span>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></td>
+              <td><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></td>
               <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
               <td>自主领取</td>
+              <td><AdminStatus status={item.status} /></td>
               <td>{item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "-"}</td>
               <td>{item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "-"}</td>
               <td>{item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "-"}</td>
@@ -201,8 +210,9 @@ export default function ReportsPage() {
                   <button className={cx(styles["table-action"], styles["cancel-btn"])} onClick={handleCancelEdit}><X /></button>
                 </div>) : (<button className={cx(styles["edit-btn"])} onClick={() => handleEditHours(item)}><Edit3 />修改</button>)}
               </td>
-            </tr>))}
-            {!reports.length && <tr><td colSpan={12}>没有匹配的报工记录。</td></tr>}
+            </tr>);
+            })}
+            {!reports.length && <tr><td colSpan={14}>没有匹配的报工记录。</td></tr>}
           </tbody>
         </table>
       </div>

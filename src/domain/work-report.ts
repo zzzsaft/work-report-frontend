@@ -49,6 +49,22 @@ export interface WorkSession {
   note?: string;
 }
 
+export interface HourAllocation {
+  allocationTemporary?: boolean;
+  allocationApplied?: boolean;
+  allocationMethod?: "actual_duration_ratio" | "original_estimated_hours" | string;
+  allocationRatio?: number;
+  allocationBasisSeconds?: number;
+  allocationParticipantCount?: number;
+}
+
+export interface HourAllocationFields {
+  estimatedHours?: number;
+  allocatedHours?: number;
+  originalEstimatedHours?: number;
+  hourAllocation?: HourAllocation;
+}
+
 export interface OperationAssignment {
   id: string;
   workOrderId: string;
@@ -69,6 +85,9 @@ export interface OperationAssignment {
   source: "assigned" | "self_claimed" | "leader_imported";
   canWorkerRemove: boolean;
   estimatedHours?: number;
+  allocatedHours?: number;
+  originalEstimatedHours?: number;
+  hourAllocation?: HourAllocation;
   actualStartAt?: string;
   actualEndAt?: string;
   claimedAt?: string;
@@ -93,6 +112,7 @@ export interface LaborStatistics {
   completedOperations: number;
   attendanceDays: number;
   trend: Array<{ label: string; hours: number; overtime: number }>;
+  hourAllocation?: HourAllocation;
 }
 
 export interface UserCapabilities {
@@ -213,6 +233,9 @@ export interface XftHoursRow {
   hours: number;
   identityNumber: string;
   staffId: string;
+  hourAllocation?: HourAllocation;
+  appliedCount?: number;
+  totalCount?: number;
 }
 
 export interface XftManualHoursDraft {
@@ -249,6 +272,9 @@ export interface ReportRecord {
   status: OperationStatus;
   claimedAt: string | undefined;
   estimatedHours: number;
+  allocatedHours?: number;
+  originalEstimatedHours?: number;
+  hourAllocation?: HourAllocation;
   durationHours: number;
   startedAt: string | undefined;
   completedAt: string | undefined;
@@ -276,6 +302,35 @@ export const statusLabel: Record<OperationStatus, string> = {
   cancelled: "已取消",
   exception: "异常",
 };
+
+export const hourAllocationTooltip = "当前同一工序多人报工时，按实际开工-完工时长占比分摊标准工时。该规则为临时口径，后续可能调整。";
+export const hourAllocationFallbackText = "未取得有效实际时长，暂按原工时统计。";
+
+export function formatHours(value: number | undefined | null) {
+  return Number.isFinite(value) ? Number(value).toFixed(2) : "0.00";
+}
+
+export function getAllocatedHours<T extends HourAllocationFields>(item: T) {
+  return item.allocatedHours ?? item.estimatedHours ?? 0;
+}
+
+export function getOriginalEstimatedHours<T extends HourAllocationFields>(item: T) {
+  return item.originalEstimatedHours ?? item.estimatedHours ?? 0;
+}
+
+export function formatAllocationRatio(value: number | undefined) {
+  return Number.isFinite(value) ? `${(Number(value) * 100).toFixed(2)}%` : "-";
+}
+
+export function formatAllocationBasisHours(seconds: number | undefined) {
+  return Number.isFinite(seconds) ? `${(Number(seconds) / 3600).toFixed(2)} 小时` : "-";
+}
+
+export function allocationMethodLabel(method: string | undefined) {
+  if (method === "actual_duration_ratio") return "按实际时长占比";
+  if (method === "original_estimated_hours") return "原工时";
+  return method || "-";
+}
 
 const activeOperationStatuses = new Set<OperationStatus>([
   "assigned",
