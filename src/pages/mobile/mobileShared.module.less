@@ -1,0 +1,110 @@
+.status-pill { display: inline-flex; min-height: 36px; align-items: center; gap: 8px; border-radius: 999px; padding: 7px 12px;
+  color: var(--success);
+  background: var(--success-bg); font-size: 16px; font-weight: 800; white-space: nowrap; }
+
+.status-pill > span { width: 9px; height: 9px; border-radius: 50%;
+  background: currentcolor; }
+
+.status-paused { color: var(--warning);
+  background: var(--warning-bg); }
+
+.status-assigned { color: var(--blue-700);
+  background: var(--blue-50); }
+
+.status-completed { color: var(--success); }
+
+.status-exception,.status-cancelled { color: var(--danger);
+  background: var(--danger-bg); }
+
+.error-banner { display: flex; align-items: center; gap: 8px; margin: 12px 16px 0; border-radius: 10px; padding: 10px 12px;
+  color: var(--danger);
+  background: var(--danger-bg); font-size: 14px; }
+
+.error-banner svg { width: 20px; }
+
+.error-banner span { flex: 1; }
+
+.error-banner button { border: 0;
+  color: inherit;
+  background: transparent; font-weight: 700; }
+
+.sheet-backdrop { position: fixed; z-index: 100; inset: 0; display: flex; align-items: flex-end; justify-content: center;
+  background: rgb(5 20 43 / 55%); }
+
+.bottom-sheet { width: min(100%, 520px); max-height: 90dvh; overflow-y: auto; border-radius: 22px 22px 0 0; padding: 8px 20px max(22px, env(safe-area-inset-bottom));
+  background: #fff; animation: sheet-up .2s ease-out; }
+
+.sheet-handle { width: 48px; height: 5px; margin: 0 auto 10px; border-radius: 3px;
+  background: #ccd2da; }
+
+.bottom-sheet header { display: flex; align-items: center; justify-content: space-between; }
+
+.bottom-sheet h2 { margin: 8px 0 18px; font-size: 24px; }
+
+.icon-button { display: grid; width: 46px; height: 46px; place-items: center; border: 0; border-radius: 50%;
+  background: #f2f4f7; }
+
+.sheet-help { margin: -8px 0 18px;
+  color: var(--muted); font-size: 16px; }
+
+.field-label { display: grid; gap: 8px; margin: 14px 0;
+  color: #344054; font-size: 16px; font-weight: 700; }
+
+.field-label input,.field-label select,.field-label textarea { width: 100%; border: 1px solid #cfd6df; border-radius: 10px; padding: 13px 14px;
+  color: var(--ink);
+  background: #fff; font-size: 17px; }
+
+.field-label select,.field-label input { min-height: 52px; }
+
+.field-label textarea { resize: vertical; }
+
+.sheet-actions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; margin-top: 20px; }
+
+.primary-button,.ghost-button { display: flex; min-height: 54px; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; padding: 10px 18px; font-size: 17px; font-weight: 800; }
+
+.primary-button { border: 0;
+  color: #fff;
+  background: var(--blue-700); }
+
+.ghost-button { border: 1px solid #cfd6df;
+  color: #344054;
+  background: #fff; }
+
+.validation-hint { margin: 8px 0 0;
+  color: var(--danger); font-size: 14px; text-align: center; }
+
+.standard-page { min-height: calc(100dvh - 84px); padding: max(24px, env(safe-area-inset-top)) 18px 30px;
+  background: var(--canvas); }
+
+.page-header h1 { margin: 0;
+  color: var(--navy-950); font-size: 29px; }
+
+.page-header p { margin: 6px 0 20px;
+  color: var(--muted); font-size: 16px; }
+
+.page-state,.empty-state { display: flex; min-height: 60dvh; align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 24px; text-align: center; }
+
+.page-state p,.empty-state p { color: var(--muted); }
+
+.empty-state > svg { width: 64px; height: 64px;
+  color: var(--blue-600); }
+
+.empty-state h1 { margin: 8px 0 0; font-size: 24px; }
+
+.empty-inline { border: 1px dashed #cbd5e1; border-radius: 13px; padding: 22px;
+  color: var(--muted);
+  background: #fff; text-align: center; }
+
+.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+
+.section-heading h2 { margin: 0;
+  color: var(--navy-950); font-size: 21px; }
+
+.section-heading p { margin: 5px 0 0;
+  color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+.section-heading .ghost-button { min-height: 42px; flex: none; padding: 8px 12px; font-size: 14px; }
+
+.section-heading .ghost-button svg { width: 17px; }
+
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
