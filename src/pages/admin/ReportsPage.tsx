@@ -82,7 +82,7 @@ export default function ReportsPage() {
   };
 
   const exportToExcel = () => {
-    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "分摊工时", "原工时", "领取人员", "来源", "状态", "开工时间", "完工时间", "领取时间", "实际工时"];
+    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
     const rows = reports.map((item) => [
       item.orderNo,
       item.productName,
@@ -96,7 +96,6 @@ export default function ReportsPage() {
       formatHours(getOriginalEstimatedHours(item)),
       item.operatorName,
       "自主领取",
-      statusLabel[item.status] || item.status,
       item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "",
       item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "",
       item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
@@ -174,7 +173,6 @@ export default function ReportsPage() {
               <th>原工时</th>
               <th>领取人员</th>
               <th>来源</th>
-              <th>状态</th>
               <th>开工时间</th>
               <th>完工时间</th>
               <th>领取时间</th>
@@ -195,7 +193,6 @@ export default function ReportsPage() {
               <td><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></td>
               <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
               <td>自主领取</td>
-              <td><AdminStatus status={item.status} /></td>
               <td>{item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "-"}</td>
               <td>{item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "-"}</td>
               <td>{item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "-"}</td>
@@ -212,7 +209,7 @@ export default function ReportsPage() {
               </td>
             </tr>);
             })}
-            {!reports.length && <tr><td colSpan={14}>没有匹配的报工记录。</td></tr>}
+            {!reports.length && <tr><td colSpan={13}>没有匹配的报工记录。</td></tr>}
           </tbody>
         </table>
       </div>
