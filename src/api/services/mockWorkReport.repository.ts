@@ -22,6 +22,7 @@ import { canWorkerRemoveAssignment, getSessionElapsedSeconds, getSwitchableAssig
 const STORAGE_KEY = "work-report-mock-db-v3";
 const XFT_CONFIG_KEY = "work-report-mock-xft-config-v1";
 const delay = (ms = 220) => new Promise((resolve) => setTimeout(resolve, ms));
+const mockRepeatClaimCooldownMs = 30 * 60 * 1000;
 const nowIso = () => new Date().toISOString();
 const todayKey = () => {
   const now = new Date();
@@ -435,8 +436,9 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const operation = db.claimOperations.find((item) => item.id === operationId);
     if (!operation || operation.status !== "available") throw new Error("该工序暂不可领取");
     if (operation.maxClaimWorkers && operation.claimedWorkers >= operation.maxClaimWorkers) throw new Error("该工序领取人数已满");
-    const duplicate = db.assignments.some((item) => item.operationCode === operation.operationCode && item.partCode === operation.partCode && item.productCode === operation.productCode && item.status !== "cancelled");
-    if (duplicate) throw new Error("你已经有这道工序，不能重复领取");
+    const duplicate = db.assignments.find((item) => item.operationCode === operation.operationCode && item.partCode === operation.partCode && item.productCode === operation.productCode && item.status !== "cancelled");
+    const duplicateAt = duplicate?.claimedAt || duplicate?.plannedStart;
+    if (duplicateAt && Date.now() - new Date(duplicateAt).getTime() < mockRepeatClaimCooldownMs) throw new Error("半小时内不能重复领取同一工序");
     const assignment = { ...createAssignmentFromPool(operation, "self_claimed"), actualStartAt: input?.startTime, actualEndAt: input?.endTime };
     db.assignments.unshift(assignment);
     db.claimOperations = db.claimOperations.map((item) => {
@@ -494,7 +496,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
   },
   async getReports(filters) {
     await delay();
-    let reports = load().reports;
+    let reports = load().reports.filter((item) => item.status !== "cancelled");
     const keyword = (filters?.keyword || "").trim().toLowerCase();
     const orderNo = (filters?.orderNo || "").trim().toLowerCase();
     const operatorName = (filters?.operatorName || "").trim().toLowerCase();

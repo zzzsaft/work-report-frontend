@@ -65,10 +65,14 @@ $RunningOnWindows = $PSVersionTable.PSVersion.Major -le 5 -or (
 ) -and $IsWindows
 
 trap {
+  $Failure = $_
+
   if ($SshMultiplexStarted) {
     & ssh @SshBaseArgs -O exit $Target 2>$null | Out-Null
   }
-  throw
+
+  Write-Error -ErrorRecord $Failure
+  exit 1
 }
 
 if ($RunningOnWindows -and -not $NoSshMultiplex) {

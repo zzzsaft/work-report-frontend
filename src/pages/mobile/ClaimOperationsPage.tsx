@@ -3,6 +3,7 @@ import { getOperationTimes } from "@/api/http/laborDataClient";
 import type { ClaimableOperation } from "@/domain/work-report";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { ClaimOperationsPanel } from "./ClaimOperationsPanel";
+import { shouldConfirmRepeatedClaim } from "./claimRepeat";
 import { cx } from "./mobileUtils";
 import { ErrorBanner, PageHeader } from "./shared";
 import sharedStyles from "./mobileShared.module.less";
@@ -13,7 +14,7 @@ const styles = { ...pageStyles, ...sharedStyles };
 export function ClaimOperationsPage() {
   const {
     actionLoading, claimLoading, claimProducts, claimProductsPagination, claimParts, claimOperations, recentClaimOperations, error,
-    searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, clearError,
+    searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, loadAssignments, clearError,
   } = useWorkReportStore();
   const [claimedOperation, setClaimedOperation] = useState<ClaimableOperation | null>(null);
   const [startTime, setStartTime] = useState("");
@@ -55,6 +56,9 @@ export function ClaimOperationsPage() {
     if (!claimedOperation) return;
     if (!startAt || !endAt || new Date(startAt).getTime() > new Date(endAt).getTime()) return;
     try {
+      await loadAssignments();
+      const assignments = useWorkReportStore.getState().assignments;
+      if (shouldConfirmRepeatedClaim(assignments, claimedOperation) && !window.confirm("之前已领取过该工序，是否再次领取？")) return;
       await claimOperation(claimedOperation.id, { startTime: startAt, endTime: endAt });
       setClaimedOperation(null);
       await loadRecentClaimableOperations();

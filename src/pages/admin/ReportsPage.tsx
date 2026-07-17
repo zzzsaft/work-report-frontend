@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
 import { Check, Download, Edit3, Search, X } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
-import { allocationMethodLabel, formatAllocationBasisHours, formatAllocationRatio, formatHours, getAllocatedHours, getOriginalEstimatedHours, hourAllocationFallbackText, hourAllocationTooltip, statusLabel, type ReportRecord } from "@/domain/work-report";
+import { allocationMethodLabel, formatAllocationBasisHours, formatAllocationRatio, formatHours, getAllocatedHours, getOriginalEstimatedHours, hourAllocationFallbackText, hourAllocationTooltip, type ReportRecord } from "@/domain/work-report";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { AdminError, AdminHeader, AdminStatus, LoadingTable } from "./adminShared";
+import { AdminError, AdminHeader, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
+import { loadReportsForCsvExport } from "./reportExport";
 import styles from "./AdminPages.module.less";
 
 export default function ReportsPage() {
@@ -25,6 +26,7 @@ export default function ReportsPage() {
   const [editingId, setEditingId] = useState("");
   const [editingHours, setEditingHours] = useState("");
   const [message, setMessage] = useState("");
+  const [exporting, setExporting] = useState(false);
   const load = useCallback(async () => {
     const data = await workReportRepository.getReports({ ...filters, page, pageSize });
     setTotal(data.total);
@@ -81,42 +83,52 @@ export default function ReportsPage() {
     setEditingHours("");
   };
 
-  const exportToExcel = () => {
-    const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
-    const rows = reports.map((item) => [
-      item.orderNo,
-      item.productName,
-      "",
-      item.partCode,
-      item.partName,
-      item.operationCode,
-      item.operationName,
-      1,
-      formatHours(getAllocatedHours(item)),
-      formatHours(getOriginalEstimatedHours(item)),
-      item.operatorName,
-      "自主领取",
-      item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "",
-      item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "",
-      item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
-      item.durationHours
-    ]);
+  const exportToExcel = async () => {
+    setExporting(true);
+    setMessage("");
+    try {
+      const exportReports = await loadReportsForCsvExport(workReportRepository, filters, total);
+      const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
+      const rows = exportReports.map((item) => [
+        item.orderNo,
+        item.productName,
+        "",
+        item.partCode,
+        item.partName,
+        item.operationCode,
+        item.operationName,
+        1,
+        formatHours(getAllocatedHours(item)),
+        formatHours(getOriginalEstimatedHours(item)),
+        item.operatorName,
+        "自主领取",
+        item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "",
+        item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "",
+        item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
+        item.durationHours
+      ]);
 
-    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `报工记录_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    setMessage("导出成功");
-    setTimeout(() => setMessage(""), 3000);
+      const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `报工记录_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      setMessage(`导出成功，共 ${exportReports.length} 条`);
+    } catch (err) {
+      setMessage("导出失败");
+      console.error("Failed to export reports:", err);
+    } finally {
+      setExporting(false);
+      setTimeout(() => setMessage(""), 3000);
+    }
   };
 
   if (loading) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><LoadingTable /></section></>;
   if (error) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><AdminError message={error} retry={() => void reload()} /></section></>;
 
   return (<>
-    <AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} onClick={exportToExcel}><Download />导出CSV</button>} />
+    <AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} onClick={() => void exportToExcel()} disabled={exporting}><Download />{exporting ? "导出中..." : "导出CSV"}</button>} />
     <section className={cx(styles["admin-panel"])}>
       {message && <div className={cx(styles["reports-message"])}>{message}</div>}
       <div className={cx(styles["reports-filter"])}>
@@ -140,7 +152,6 @@ export default function ReportsPage() {
             <option value="running">进行中</option>
             <option value="paused">已暂停</option>
             <option value="completed">已完成</option>
-            <option value="cancelled">已取消</option>
           </select>
         </div>
         <div className={cx(styles["filter-input"])}>
