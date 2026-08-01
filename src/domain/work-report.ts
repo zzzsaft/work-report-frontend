@@ -268,6 +268,7 @@ export interface ReportRecord {
   partName: string;
   operationCode: string;
   operationName: string;
+  operationNote: string;
   operatorName: string;
   status: OperationStatus;
   claimedAt: string | undefined;

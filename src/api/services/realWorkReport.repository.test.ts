@@ -23,6 +23,7 @@ const report = (id: string): ReportRecord => ({
   partName: "部件",
   operationCode: "OP-1",
   operationName: "工序",
+  operationNote: "工艺说明。",
   operatorName: "张师傅",
   status: "completed",
   claimedAt: "2026-07-01T08:00:00.000Z",
