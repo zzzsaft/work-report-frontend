@@ -56,6 +56,14 @@ export interface ReportFilters {
 
 export type ReportListResponse = PaginatedResult<ReportRecord>;
 
+export interface StaffStat {
+  workerId: string;
+  workerName: string;
+  totalHours: number;
+  completedOperations: number;
+  attendanceDays: number;
+}
+
 export interface WorkReportRepository {
   getCapabilities(): Promise<UserCapabilities>;
   getCurrentAssignment(): Promise<OperationAssignment | null>;
@@ -71,6 +79,8 @@ export interface WorkReportRepository {
   claimOperation(operationId: string, input?: { startTime?: string; endTime?: string }): Promise<OperationAssignment>;
   removeClaimedAssignment(assignmentId: string): Promise<void>;
   getStatistics(period: LaborStatistics["period"]): Promise<LaborStatistics>;
+  getMyReports(period: LaborStatistics["period"]): Promise<ReportRecord[]>;
+  getStaffStats(period: "month" | "lastMonth"): Promise<StaffStat[]>;
   getAttendance(): Promise<DailyAttendance[]>;
   getDashboard(): Promise<DashboardSummary>;
   getOrders(): Promise<WorkOrder[]>;

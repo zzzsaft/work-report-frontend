@@ -102,6 +102,13 @@ const isSameMonth = (left: Date, right: Date) => {
   const r = getShanghaiParts(right);
   return l.year === r.year && l.month === r.month;
 };
+const isPreviousMonth = (time: Date, now: Date) => {
+  const t = getShanghaiParts(time);
+  const n = getShanghaiParts(now);
+  const prevMonth = n.month === 0 ? 11 : n.month - 1;
+  const prevYear = n.month === 0 ? n.year - 1 : n.year;
+  return t.year === prevYear && t.month === prevMonth;
+};
 const currentSalaryPeriod = () => {
   const parts = getShanghaiParts(new Date());
   return `${parts.year}${String(parts.month + 1).padStart(2, "0")}`;
@@ -111,6 +118,7 @@ const isInStatisticsPeriod = (assignment: OperationAssignment, period: LaborStat
   if (Number.isNaN(time.getTime())) return false;
   if (period === "day") return dateKey(time) === dateKey(now);
   if (period === "week") return time.getTime() >= weekStart(now).getTime() && time.getTime() <= weekEnd(now).getTime();
+  if (period === "lastMonth") return isPreviousMonth(time, now);
   return isSameMonth(time, now);
 };
 const weekLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -120,7 +128,9 @@ const buildClaimedStatistics = (assignments: OperationAssignment[], period: Labo
   const totalHours = roundHours(counted.reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
   const attendanceDays = new Set(counted.map((assignment) => dateKey(assignmentStatDate(assignment)))).size;
   const nowShanghai = getShanghaiParts(now);
-  const daysInCurrentMonth = new Date(Date.UTC(nowShanghai.year, nowShanghai.month + 1, 0)).getUTCDate();
+  const targetMonth = period === "lastMonth" ? (nowShanghai.month === 0 ? 11 : nowShanghai.month - 1) : nowShanghai.month;
+  const targetYear = period === "lastMonth" ? (nowShanghai.month === 0 ? nowShanghai.year - 1 : nowShanghai.year) : nowShanghai.year;
+  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
   const trend = period === "day" ? [] : period === "week"
     ? weekLabels.map((label, index) => {
       const day = new Date(weekStart(now));
@@ -128,14 +138,14 @@ const buildClaimedStatistics = (assignments: OperationAssignment[], period: Labo
       const hours = roundHours(counted.filter((assignment) => dateKey(assignmentStatDate(assignment)) === dateKey(day)).reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
       return { label, hours, overtime: 0 };
     })
-    : Array.from({ length: Math.ceil(daysInCurrentMonth / 7) }, (_, index) => {
+    : Array.from({ length: Math.ceil(daysInTargetMonth / 7) }, (_, index) => {
       const start = index * 7 + 1;
       const end = start + 6;
       const hours = roundHours(counted.filter((assignment) => {
         const day = getShanghaiParts(new Date(assignmentStatDate(assignment))).day;
         return day >= start && day <= end;
       }).reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
-      return { label: `${nowShanghai.month + 1}月第${index + 1}周`, hours, overtime: 0 };
+      return { label: `${targetMonth + 1}月第${index + 1}周`, hours, overtime: 0 };
     });
   const hourAllocation = counted.find((assignment) => assignment.hourAllocation)?.hourAllocation;
   return { period, totalHours, regularHours: totalHours, overtimeHours: 0, completedOperations: counted.length, attendanceDays, trend, hourAllocation };
@@ -360,9 +370,9 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
     permissionGroup: index === 0 ? "admin" : index < 4 ? "leader" : "worker",
   })),
   reports: [
-    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operationNote: "切削前校验毛坯余量，切削后去毛刺并测量各段外圆尺寸。", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, allocatedHours: 4.75, originalEstimatedHours: 8, hourAllocation: { allocationTemporary: true, allocationApplied: true, allocationMethod: "actual_duration_ratio", allocationRatio: 0.59375, allocationBasisSeconds: 24300, allocationParticipantCount: 2 }, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", actualStartAt: "2026-06-22T08:12:00+08:00", actualEndAt: "2026-06-22T15:30:00+08:00", photos: [] },
-    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operationNote: "使用M8丝锥，完工后逐件清理铁屑。", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, allocatedHours: 4, originalEstimatedHours: 4, hourAllocation: { allocationTemporary: true, allocationApplied: false, allocationMethod: "original_estimated_hours", allocationParticipantCount: 2 }, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T09:05:00+08:00", actualEndAt: undefined, photos: [] },
-    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operationNote: "加工前确认夹具定位牢固；首件完成后检查孔距与表面粗糙度，发现毛刺立即停机反馈。", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T08:20:00+08:00", actualEndAt: undefined, photos: [] },
+    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partNo: "01", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operationNote: "切削前校验毛坯余量，切削后去毛刺并测量各段外圆尺寸。", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, allocatedHours: 4.75, originalEstimatedHours: 8, hourAllocation: { allocationTemporary: true, allocationApplied: true, allocationMethod: "actual_duration_ratio", allocationRatio: 0.59375, allocationBasisSeconds: 24300, allocationParticipantCount: 2 }, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", actualStartAt: "2026-06-22T08:12:00+08:00", actualEndAt: "2026-06-22T15:30:00+08:00", photos: [] },
+    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partNo: "02", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operationNote: "使用M8丝锥，完工后逐件清理铁屑。", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, allocatedHours: 4, originalEstimatedHours: 4, hourAllocation: { allocationTemporary: true, allocationApplied: false, allocationMethod: "original_estimated_hours", allocationParticipantCount: 2 }, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T09:05:00+08:00", actualEndAt: undefined, photos: [] },
+    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partNo: "03", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operationNote: "加工前确认夹具定位牢固；首件完成后检查孔距与表面粗糙度，发现毛刺立即停机反馈。", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T08:20:00+08:00", actualEndAt: undefined, photos: [] },
   ],
   exceptions: [
     { id: "ex-001", type: "overtime", title: "工序用时超过计划", detail: "精加工 · 铣削已超过计划工时 45 分钟", orderNo: "WO-20260623-018", createdAt: "2026-06-23T14:20:00+08:00", status: "open" },
@@ -519,6 +529,59 @@ export const mockWorkReportRepository: WorkReportRepository = {
   async getStatistics(period) {
     await delay();
     return buildClaimedStatistics(load().assignments, period);
+  },
+  async getMyReports(period) {
+    await delay();
+    const db = load();
+    const now = new Date();
+    const counted = db.reports.filter((item) => {
+      if (item.status === "cancelled") return false;
+      const time = new Date(item.actualEndAt || item.claimedAt || "");
+      if (Number.isNaN(time.getTime())) return false;
+      if (period === "day") return dateKey(time) === dateKey(now);
+      if (period === "week") return time.getTime() >= weekStart(now).getTime() && time.getTime() <= weekEnd(now).getTime();
+      if (period === "lastMonth") return isPreviousMonth(time, now);
+      return isSameMonth(time, now);
+    });
+    return counted.sort((a, b) => {
+      const ta = new Date(a.actualEndAt || a.claimedAt || "").getTime();
+      const tb = new Date(b.actualEndAt || b.claimedAt || "").getTime();
+      return tb - ta;
+    });
+  },
+  async getStaffStats(period) {
+    await delay();
+    const db = load();
+    const now = new Date();
+    const counted = db.reports.filter((item) => {
+      if (item.status === "cancelled") return false;
+      const time = new Date(item.actualEndAt || item.claimedAt || "");
+      if (Number.isNaN(time.getTime())) return false;
+      if (period === "month") return isSameMonth(time, now);
+      if (period === "lastMonth") return isPreviousMonth(time, now);
+      return false;
+    });
+    const byWorker = new Map<string, { name: string; totalHours: number; ops: number; dates: Set<string> }>();
+    for (const r of counted) {
+      const key = r.operatorName;
+      const existing = byWorker.get(key);
+      const h = r.allocatedHours || 0;
+      const d = r.actualEndAt ? dateKey(r.actualEndAt) : "";
+      if (existing) {
+        existing.totalHours += h;
+        existing.ops += 1;
+        if (d) existing.dates.add(d);
+      } else {
+        byWorker.set(key, { name: r.operatorName, totalHours: h, ops: 1, dates: new Set(d ? [d] : []) });
+      }
+    }
+    return Array.from(byWorker.entries()).map(([name, data]) => ({
+      workerId: name,
+      workerName: name,
+      totalHours: Math.round(data.totalHours * 100) / 100,
+      completedOperations: data.ops,
+      attendanceDays: data.dates.size
+    })).sort((a, b) => b.totalHours - a.totalHours);
   },
   async getAttendance() { await delay(); return [0, 1, 2, 3, 4].map((offset): DailyAttendance => ({ date: `2026-06-${23 - offset}`, shift: "白班", regularHours: 8, overtimeHours: offset === 0 ? .6 : offset === 2 ? 1.2 : 0, attendanceStatus: "normal" })); },
   async getDashboard() { await delay(); const db = load(); return { activeOrders: db.orders.filter((x) => x.status === "in_progress").length, runningWorkers: 18, todayHours: 146.5, exceptionCount: db.exceptions.filter((x) => x.status === "open").length }; },
@@ -684,7 +747,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const db = load();
     const assignment = findAssignment(db, assignmentId);
     db.assignments = db.assignments.filter((item) => item.id !== assignmentId);
-    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), actualStartAt: assignment.actualStartAt, actualEndAt: assignment.actualEndAt, photos: [] });
+    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partNo: assignment.partNo || "", partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operationNote: assignment.operationNote || "", operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), actualStartAt: assignment.actualStartAt, actualEndAt: assignment.actualEndAt, photos: [] });
     save(db);
   },
   async resetDemo(scenario = "running") { await delay(100); save(initialDb(scenario)); },

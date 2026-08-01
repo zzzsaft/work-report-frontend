@@ -25,6 +25,8 @@ export const realWorkReportRepository: WorkReportRepository = {
   async claimOperation(operationId, input) { return (await workReportClient.post(`/claim/operations/${operationId}/claim`, input)).data; },
   async removeClaimedAssignment(assignmentId) { await workReportClient.delete(`/assignments/${assignmentId}/claim`); },
   async getStatistics(period) { return (await workReportClient.get("/statistics/me", { params: { period } })).data; },
+  async getMyReports(period) { return (await workReportClient.get("/reports/me", { params: { period } })).data; },
+  async getStaffStats(period) { return (await workReportClient.get("/admin/staff-stats", { params: { period } })).data; },
   async getAttendance() { return (await workReportClient.get("/attendance/me")).data; },
   async getDashboard() { return (await workReportClient.get("/admin/dashboard")).data; },
   async getOrders() { return normalizeOrders((await workReportClient.get("/admin/orders", { params: { page: 1, pageSize: 50 } })).data); },

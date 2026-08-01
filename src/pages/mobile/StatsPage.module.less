@@ -1,4 +1,4 @@
-.segmented { display: grid; margin-bottom: 18px; grid-template-columns: repeat(3, 1fr); border-radius: 12px; padding: 4px;
+.segmented { display: grid; margin-bottom: 18px; grid-template-columns: repeat(4, 1fr); border-radius: 12px; padding: 4px;
   background: #e7edf4; }
 
 .segmented button { min-height: 48px; border: 0; border-radius: 9px;
@@ -12,9 +12,11 @@
   color: #9a3412;
   background: #ffedd5; font-size: 12px; font-weight: 800; }
 
-.stat-hero { display: flex; align-items: baseline; gap: 8px; border-radius: 18px; padding: 24px;
+.stat-hero { display: flex; align-items: baseline; gap: 8px; border-radius: 18px; padding: 24px; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
   color: #fff;
   background: linear-gradient(135deg, #063379, #0e61d6); box-shadow: 0 12px 26px rgb(8 67 148 / 20%); }
+
+.stat-hero:active { transform: scale(0.985); box-shadow: 0 6px 14px rgb(8 67 148 / 20%); }
 
 .stat-hero span { align-self: flex-start; font-size: 16px; }
 

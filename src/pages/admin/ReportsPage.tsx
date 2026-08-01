@@ -5,7 +5,7 @@ import { allocationMethodLabel, formatAllocationBasisHours, formatAllocationRati
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { AdminError, AdminHeader, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
-import { loadReportsForCsvExport } from "./reportExport";
+import { loadReportsForCsvExport, escapeCsvField } from "./reportExport";
 import styles from "./AdminPages.module.less";
 
 export default function ReportsPage() {
@@ -88,25 +88,26 @@ export default function ReportsPage() {
     setMessage("");
     try {
       const exportReports = await loadReportsForCsvExport(workReportRepository, filters, total);
-      const headers = ["工单", "产品名称", "产品编号", "部件号", "部件名称", "工序号", "工序名称", "工艺内容", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
+      const headers = ["工单", "产品名称", "产品编号", "部件序号", "部件号", "部件名称", "工序号", "工序名称", "工艺内容", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
       const rows = exportReports.map((item) => [
-        item.orderNo,
-        item.productName,
+        escapeCsvField(item.orderNo),
+        escapeCsvField(item.productName),
         "",
-        item.partCode,
-        item.partName,
-        item.operationCode,
-        item.operationName,
-        item.operationNote || "",
+        escapeCsvField(item.partNo),
+        escapeCsvField(item.partCode),
+        escapeCsvField(item.partName),
+        escapeCsvField(item.operationCode),
+        escapeCsvField(item.operationName),
+        escapeCsvField(item.operationNote || ""),
         1,
-        formatHours(getAllocatedHours(item)),
-        formatHours(getOriginalEstimatedHours(item)),
-        item.operatorName,
+        escapeCsvField(formatHours(getAllocatedHours(item))),
+        escapeCsvField(formatHours(getOriginalEstimatedHours(item))),
+        escapeCsvField(item.operatorName),
         "自主领取",
-        item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "",
-        item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "",
-        item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "",
-        item.durationHours
+        escapeCsvField(item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : ""),
+        escapeCsvField(item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : ""),
+        escapeCsvField(item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : ""),
+        escapeCsvField(item.durationHours)
       ]);
 
       const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
@@ -177,20 +178,21 @@ export default function ReportsPage() {
         <table className={cx(styles["reports-table"])}>
           <thead>
             <tr>
-              <th>工单</th>
-              <th>产品</th>
-              <th>部件</th>
-              <th>工序</th>
-              <th>工艺内容</th>
-              <th>分摊工时</th>
-              <th>原工时</th>
-              <th>领取人员</th>
-              <th>来源</th>
-              <th>开工时间</th>
-              <th>完工时间</th>
-              <th>领取时间</th>
-              <th>实际工时</th>
-              <th>操作</th>
+              <th style={{ width: 100 }}>工单</th>
+              <th style={{ width: 110 }}>产品</th>
+              <th style={{ width: 60 }}>部件序号</th>
+              <th style={{ width: 110 }}>部件</th>
+              <th style={{ width: 120 }}>工序</th>
+              <th style={{ width: 140 }}>工艺内容</th>
+              <th style={{ width: 100 }}>分摊工时</th>
+              <th style={{ width: 80 }}>原工时</th>
+              <th style={{ width: 80 }}>领取人员</th>
+              <th style={{ width: 70 }}>来源</th>
+              <th style={{ width: 130 }}>开工时间</th>
+              <th style={{ width: 130 }}>完工时间</th>
+              <th style={{ width: 130 }}>领取时间</th>
+              <th style={{ width: 80 }}>实际工时</th>
+              <th style={{ width: 80 }}>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -200,9 +202,10 @@ export default function ReportsPage() {
               return (<tr key={item.id}>
               <td><strong>{item.orderNo}</strong></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.partCode}</span></div></td>
+              <td><strong>{item.partNo}</strong></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></td>
-              <td className={cx(styles["operation-note-cell"])} title={item.operationNote || ""}>{item.operationNote || "-"}</td>
+              <td className={cx(styles["operation-note-cell"])} title={(item.operationNote || "").replace(/\n/g, " ")}>{(item.operationNote || "").replace(/\n/g, " ") || "-"}</td>
               <td><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <span className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</span>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></td>
               <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
@@ -223,7 +226,7 @@ export default function ReportsPage() {
               </td>
             </tr>);
             })}
-            {!reports.length && <tr><td colSpan={14}>没有匹配的报工记录。</td></tr>}
+            {!reports.length && <tr><td colSpan={15}>没有匹配的报工记录。</td></tr>}
           </tbody>
         </table>
       </div>

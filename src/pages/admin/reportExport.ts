@@ -3,6 +3,14 @@ import type { ReportRecord } from "@/domain/work-report";
 
 const maxReportExportPageSize = 100;
 
+export function escapeCsvField(value: string | number): string {
+  const str = String(value).replace(/\r?\n/g, " ").replace(/"/g, '""');
+  if (str.includes(",") || str.includes('"') || str.includes(" ")) {
+    return `"${str}"`;
+  }
+  return str;
+}
+
 export async function loadReportsForCsvExport(
   repository: Pick<WorkReportRepository, "getReports">,
   filters: ReportFilters,

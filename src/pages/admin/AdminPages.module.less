@@ -616,13 +616,13 @@
 .reports-filter .filter-reset-btn { min-height: 36px; padding: 0 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;
   background: #fff; color: #64748b; cursor: pointer; }
 
-.table-wrap .reports-table { width: 100%; border-collapse: collapse; white-space: normal; }
+.table-wrap .reports-table { width: 100%; border-collapse: collapse; white-space: normal; table-layout: fixed; }
 
-.table-wrap .reports-table th { padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600;
-  background: #f1f5f9; color: #475569; border-bottom: 2px solid #e2e8f0; }
+.table-wrap .reports-table th { padding: 10px 12px; text-align: left; font-size: 13px; font-weight: 600;
+  background: #f1f5f9; color: #475569; border-bottom: 2px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.table-wrap .reports-table td { padding: 12px 16px; font-size: 13px;
-  border-top: none; border-bottom: 1px solid #e2e8f0; }
+.table-wrap .reports-table td { padding: 10px 12px; font-size: 13px;
+  border-top: none; border-bottom: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; }
 
 .table-wrap .reports-table tbody tr:hover {
   background: #f8fafc; }
@@ -635,16 +635,16 @@
 .table-wrap .reports-table .cell-with-sub span { font-size: 12px;
   color: #64748b; display: block; margin-top: 0; }
 
-.table-wrap .reports-table .hours-allocation-cell { min-width: 118px; }
+.table-wrap .reports-table .hours-allocation-cell { width: 100px; min-width: 100px; }
 
-.table-wrap .reports-table .operation-note-cell { max-width: 260px;
-  color: #475569; font-size: 12px; line-height: 1.45;
+.table-wrap .reports-table .operation-note-cell { width: 140px; min-width: 140px; max-width: 140px;
+  color: #475569; font-size: 12px; line-height: 1.4;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .table-wrap .reports-table .hours-allocation-cell em { margin-top: 4px;
   color: #b45309; font-size: 12px; font-style: normal; line-height: 1.35; }
 
-.table-wrap .reports-table .operator-cell { font-weight: 600;
+.table-wrap .reports-table .operator-cell { width: 80px; min-width: 80px; font-weight: 600;
   color: #1e293b; }
 
 .table-wrap .reports-table .status-tag { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
@@ -708,6 +708,33 @@
 
 .export-csv-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.period-tabs { display: inline-flex; border-radius: 8px; padding: 3px; background: #e7edf4; }
+
+.period-tabs button { min-height: 34px; padding: 0 16px; border: 0; border-radius: 6px; color: #596273; background: transparent; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+.period-tabs .periodActive { color: var(--blue-700); background: #fff; box-shadow: 0 2px 6px rgb(30 50 80 / 10%); }
+
+.staff-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+
+.staff-summary-item { display: flex; flex-direction: column; gap: 4px; padding: 16px 20px; border-radius: 12px; background: linear-gradient(135deg, #f0f5ff, #e8f0fe); }
+
+.staff-summary-item span { color: #6b7280; font-size: 13px; }
+
+.staff-summary-item strong { color: #1e40af; font-size: 28px; font-weight: 800; }
+
+.rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #e5e7eb; color: #6b7280; font-size: 13px; font-weight: 700; }
+
+.rank-badge.rank-1 { background: #fef3c7; color: #b45309; }
+.rank-badge.rank-2 { background: #e0e7ff; color: #3730a3; }
+.rank-badge.rank-3 { background: #fce7f3; color: #9d174d; }
+
+.hours-value { color: var(--blue-700); font-size: 16px; }
+
+.hours-bar-wrap { display: flex; align-items: center; gap: 8px; }
+
+.hours-bar { height: 8px; border-radius: 4px; background: linear-gradient(90deg, #3b82f6, #1e40af); transition: width .3s ease; }
+
+.hours-bar-label { color: #6b7280; font-size: 12px; white-space: nowrap; min-width: 48px; text-align: right; }
 
 @media (min-width: 600px) { .action-dock { right: 50%; left: auto; width: 520px; transform: translateX(50%); } }
 

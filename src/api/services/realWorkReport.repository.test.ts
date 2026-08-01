@@ -19,6 +19,7 @@ const report = (id: string): ReportRecord => ({
   id,
   orderNo: `WO-${id}`,
   productName: "产品",
+  partNo: "01",
   partCode: "P-1",
   partName: "部件",
   operationCode: "OP-1",

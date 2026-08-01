@@ -105,7 +105,7 @@ export interface DailyAttendance {
 }
 
 export interface LaborStatistics {
-  period: "day" | "week" | "month";
+  period: "day" | "week" | "month" | "lastMonth";
   totalHours: number;
   regularHours: number;
   overtimeHours: number;
@@ -264,6 +264,7 @@ export interface ReportRecord {
   id: string;
   orderNo: string;
   productName: string;
+  partNo: string;
   partCode: string;
   partName: string;
   operationCode: string;
