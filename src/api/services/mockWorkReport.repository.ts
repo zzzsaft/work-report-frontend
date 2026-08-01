@@ -31,35 +31,86 @@ const todayKey = () => {
 const todayStart = (hour: number) => `${todayKey()}T${String(hour).padStart(2, "0")}:00:00+08:00`;
 const todayEnd = (hour: number, minute = 0) => `${todayKey()}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+08:00`;
 const roundHours = (value: number) => Math.round(value * 10) / 10;
+
+// ========== 前端 mock 端 Asia/Shanghai 时区安全日期工具（和后端保持一致）==========
+
+const ASIA_SHANGHAI_TZ = "Asia/Shanghai";
+const shanghaiWeekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+interface ShanghaiParts {
+  year: number;
+  month: number; // 0-indexed
+  day: number;
+  hour: number;
+  minute: number;
+  weekday: number;
+}
+
+let shanghaiFormatter: Intl.DateTimeFormat | null = null;
+
+const getShanghaiParts = (date: Date): ShanghaiParts => {
+  if (!shanghaiFormatter) {
+    shanghaiFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: ASIA_SHANGHAI_TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      weekday: "short",
+      hour12: false
+    });
+  }
+  const parts = shanghaiFormatter
+    .formatToParts(date)
+    .reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {} as Record<string, string>);
+  const rawHour = parts.hour ?? "0";
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month) - 1,
+    day: Number(parts.day),
+    hour: Number(rawHour === "24" ? "0" : rawHour),
+    minute: Number(parts.minute),
+    weekday: shanghaiWeekdayMap[parts.weekday ?? "Mon"] ?? 1
+  };
+};
+
 const dateKey = (date: Date | string) => {
   const value = date instanceof Date ? date : new Date(date);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  const parts = getShanghaiParts(value);
+  return `${parts.year}-${String(parts.month + 1).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 };
 const assignmentStatDate = (assignment: OperationAssignment) => assignment.claimedAt || assignment.plannedStart;
 const assignmentStatHours = (assignment: OperationAssignment) => assignment.allocatedHours ?? assignment.estimatedHours ?? 0;
+
+/** 返回北京时间周一 00:00 的 Date（内部仍为 UTC 基准） */
 const weekStart = (date: Date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const day = start.getDay() || 7;
-  start.setDate(start.getDate() - day + 1);
-  return start;
+  const parts = getShanghaiParts(date);
+  const mondayOffset = (parts.weekday + 6) % 7;
+  // Beijing Y-M-D 00:00 = UTC Y-M-D 00:00 minus 8h
+  return new Date(Date.UTC(parts.year, parts.month, parts.day - mondayOffset) - 8 * 3600 * 1000);
 };
 const weekEnd = (date: Date) => {
-  const end = weekStart(date);
-  end.setDate(end.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
+  const end = new Date(weekStart(date).getTime() + 7 * 24 * 3600 * 1000 - 1);
   return end;
 };
-const isSameMonth = (left: Date, right: Date) => left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+const isSameMonth = (left: Date, right: Date) => {
+  const l = getShanghaiParts(left);
+  const r = getShanghaiParts(right);
+  return l.year === r.year && l.month === r.month;
+};
 const currentSalaryPeriod = () => {
-  const now = new Date();
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const parts = getShanghaiParts(new Date());
+  return `${parts.year}${String(parts.month + 1).padStart(2, "0")}`;
 };
 const isInStatisticsPeriod = (assignment: OperationAssignment, period: LaborStatistics["period"], now = new Date()) => {
   const time = new Date(assignmentStatDate(assignment));
   if (Number.isNaN(time.getTime())) return false;
   if (period === "day") return dateKey(time) === dateKey(now);
-  if (period === "week") return time >= weekStart(now) && time <= weekEnd(now);
+  if (period === "week") return time.getTime() >= weekStart(now).getTime() && time.getTime() <= weekEnd(now).getTime();
   return isSameMonth(time, now);
 };
 const weekLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -68,21 +119,23 @@ const buildClaimedStatistics = (assignments: OperationAssignment[], period: Labo
   const counted = assignments.filter((assignment) => assignment.status !== "cancelled" && isInStatisticsPeriod(assignment, period, now));
   const totalHours = roundHours(counted.reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
   const attendanceDays = new Set(counted.map((assignment) => dateKey(assignmentStatDate(assignment)))).size;
+  const nowShanghai = getShanghaiParts(now);
+  const daysInCurrentMonth = new Date(Date.UTC(nowShanghai.year, nowShanghai.month + 1, 0)).getUTCDate();
   const trend = period === "day" ? [] : period === "week"
     ? weekLabels.map((label, index) => {
       const day = new Date(weekStart(now));
-      day.setDate(day.getDate() + index);
+      day.setUTCDate(day.getUTCDate() + index);
       const hours = roundHours(counted.filter((assignment) => dateKey(assignmentStatDate(assignment)) === dateKey(day)).reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
       return { label, hours, overtime: 0 };
     })
-    : Array.from({ length: Math.ceil(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() / 7) }, (_, index) => {
+    : Array.from({ length: Math.ceil(daysInCurrentMonth / 7) }, (_, index) => {
       const start = index * 7 + 1;
       const end = start + 6;
       const hours = roundHours(counted.filter((assignment) => {
-        const day = new Date(assignmentStatDate(assignment)).getDate();
+        const day = getShanghaiParts(new Date(assignmentStatDate(assignment))).day;
         return day >= start && day <= end;
       }).reduce((sum, assignment) => sum + assignmentStatHours(assignment), 0));
-      return { label: `${now.getMonth() + 1}月第${index + 1}周`, hours, overtime: 0 };
+      return { label: `${nowShanghai.month + 1}月第${index + 1}周`, hours, overtime: 0 };
     });
   const hourAllocation = counted.find((assignment) => assignment.hourAllocation)?.hourAllocation;
   return { period, totalHours, regularHours: totalHours, overtimeHours: 0, completedOperations: counted.length, attendanceDays, trend, hourAllocation };
