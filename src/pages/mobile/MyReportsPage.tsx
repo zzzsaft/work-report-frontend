@@ -25,7 +25,7 @@ const formatDate = (iso: string | undefined) => {
   } catch { return iso; }
 };
 
-const formatHours = (h: number) => (h || 0).toFixed(1);
+const formatHours = (h: number | undefined) => (h || 0).toFixed(1);
 
 export function MyReportsPage() {
   const navigate = useNavigate();
@@ -64,8 +64,8 @@ export function MyReportsPage() {
               <span className={`${styles["my-report-info-value"]} ${styles.code}`}>{item.operationCode}</span>
             </div>
             <div className={styles["my-report-info-item"]}>
-              <span className={styles["my-report-info-label"]}>数量</span>
-              <span className={styles["my-report-info-value"]}>{item.plannedQuantity || "-"}</span>
+              <span className={styles["my-report-info-label"]}>原工时</span>
+              <span className={styles["my-report-info-value"]}>{(item.originalEstimatedHours ?? item.estimatedHours).toFixed(1)}h</span>
             </div>
             {item.operationNote && <div className={styles["my-report-note"]} title={item.operationNote.replace(/\n/g, " ")}>{item.operationNote.replace(/\n/g, " ")}</div>}
           </div>
