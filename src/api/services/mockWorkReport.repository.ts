@@ -241,6 +241,24 @@ const mockWorkers: WorkerSummary[] = [
   { id: "worker-014", employeeNo: "EMP-20240031", name: "马师傅", nameInitials: "msf", teamName: "生产二组", activeAssignmentCount: 2 },
 ];
 
+interface MockDbTeam {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  users: Array<{ id: string; name: string; employeeNo: string | null; teamName: string | null }>;
+  operations: Array<{ id: string; operationCode: string; operationName: string }>;
+}
+
+interface MockDbTeamOpAssignment {
+  id: string;
+  teamId: string;
+  operationCode: string;
+  operationName: string;
+  createdAt: string;
+}
+
 interface MockDb {
   assignments: OperationAssignment[];
   orders: WorkOrder[];
@@ -251,6 +269,8 @@ interface MockDb {
   reports: ReportRecord[];
   exceptions: ProductionException[];
   operationWorkerAssignments?: OperationWorkerAssignment[];
+  teams?: MockDbTeam[];
+  teamOperationAssignments?: MockDbTeamOpAssignment[];
 }
 
 const baseAssignment = (status: "assigned" | "running" | "paused" = "running"): OperationAssignment => {
@@ -900,7 +920,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       users: mockWorkers.filter((w) => !w.teamName).map((w) => ({
-        id: w.id, name: w.name, employeeNo: w.employeeNo, teamName: w.teamName
+        id: w.id, name: w.name, employeeNo: w.employeeNo ?? null, teamName: w.teamName ?? null
       })),
       operations: []
     };
@@ -909,8 +929,11 @@ export const mockWorkReportRepository: WorkReportRepository = {
       const teamWorkers = mockWorkers.filter((w) => w.teamName === team.name);
       const teamOps = (db.teamOperationAssignments || []).filter((toa) => toa.teamId === team.id);
       return {
-        ...team,
-        users: teamWorkers.map((w) => ({ id: w.id, name: w.name, employeeNo: w.employeeNo, teamName: w.teamName })),
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        createdAt: team.createdAt,
+        users: teamWorkers.map((w) => ({ id: w.id, name: w.name, employeeNo: w.employeeNo ?? null, teamName: w.teamName ?? null })),
         operations: teamOps.map((toa) => ({ id: toa.id, operationCode: toa.operationCode, operationName: toa.operationName }))
       };
     });
@@ -982,9 +1005,9 @@ export const mockWorkReportRepository: WorkReportRepository = {
         .map((w) => ({
           id: w.id,
           name: w.name,
-          employeeNo: w.employeeNo,
-          teamName: w.teamName,
-          nameInitials: w.nameInitials
+          employeeNo: w.employeeNo ?? null,
+          teamName: w.teamName ?? null,
+          nameInitials: w.nameInitials ?? null
         }));
     }
     const db = load();
@@ -995,9 +1018,9 @@ export const mockWorkReportRepository: WorkReportRepository = {
       .map((w) => ({
         id: w.id,
         name: w.name,
-        employeeNo: w.employeeNo,
-        teamName: w.teamName,
-        nameInitials: w.nameInitials
+        employeeNo: w.employeeNo ?? null,
+        teamName: w.teamName ?? null,
+        nameInitials: w.nameInitials ?? null
       }));
   },
   async addTeamMember(teamId, userId) {

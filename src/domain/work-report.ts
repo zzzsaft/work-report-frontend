@@ -148,7 +148,7 @@ export interface WorkerSummary {
   employeeNo: string;
   name: string;
   nameInitials: string;
-  teamName: string;
+  teamName?: string | undefined;
   activeAssignmentCount: number;
 }
 
@@ -157,7 +157,7 @@ export interface UnmappedWorker {
   employeeNo: string;
   name: string;
   nameInitials: string;
-  teamName: string;
+  teamName?: string | undefined;
 }
 
 export interface WorkerPermission extends WorkerSummary {

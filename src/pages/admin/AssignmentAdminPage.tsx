@@ -565,7 +565,7 @@ function TeamFormModal({
 }: {
   team?: TeamInfo;
   onClose: () => void;
-  onSubmit: (name: string, description?: string) => Promise<void>;
+  onSubmit: (name: string, description?: string) => Promise<TeamInfo | void>;
 }) {
   const [name, setName] = useState(team?.name || "");
   const [description, setDescription] = useState(team?.description || "");

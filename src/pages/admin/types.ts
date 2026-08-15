@@ -14,4 +14,4 @@ export type ConfirmDelete =
   | { type: "batch"; count: number };
 
 export type { OperationWorkerAssignment, UnmappedWorker, WorkerSummary } from "@/domain/work-report";
-export type { StaffStat } from "@/api/services/workReport.repository";
+export type { StaffStat, TeamInfo, TeamMember, TeamOperation } from "@/api/services/workReport.repository";
