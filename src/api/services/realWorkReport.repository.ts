@@ -97,4 +97,8 @@ export const realWorkReportRepository: WorkReportRepository = {
   async deleteTeamOperation(id) { return (await workReportClient.delete(`/admin/team-operations/${encodeURIComponent(id)}`)).data; },
   async batchDeleteTeamOperations(ids) { return (await workReportClient.post("/admin/team-operations/batch-delete", { ids })).data; },
   async syncTeamOperations() { return (await workReportClient.post("/admin/team-operations/sync")).data; },
+
+  // System config
+  async getSystemConfig() { return (await workReportClient.get("/admin/system-config")).data; },
+  async saveSystemConfig(config) { return (await workReportClient.put("/admin/system-config", config)).data; },
 };

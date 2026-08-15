@@ -11,6 +11,7 @@ import type {
   OperationWorkerAssignment,
   ProductionException,
   ReportRecord,
+  SystemConfig,
   UserCapabilities,
   UnmappedWorker,
   PermissionGroup,
@@ -163,4 +164,8 @@ export interface WorkReportRepository {
   deleteTeamOperation(id: string): Promise<{ count: number }>;
   batchDeleteTeamOperations(ids: string[]): Promise<{ count: number }>;
   syncTeamOperations(): Promise<{ count: number }>;
+
+  // System config
+  getSystemConfig(): Promise<SystemConfig>;
+  saveSystemConfig(config: { teamOperationPermissionEnabled?: boolean }): Promise<SystemConfig>;
 }

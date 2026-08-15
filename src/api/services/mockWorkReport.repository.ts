@@ -1149,4 +1149,22 @@ export const mockWorkReportRepository: WorkReportRepository = {
     save(db);
     return { count: upserted };
   },
+
+  // System config
+  async getSystemConfig() {
+    await delay();
+    const raw = localStorage.getItem("work-report-mock-system-config-v1");
+    if (raw) return JSON.parse(raw);
+    const config = { id: "default", teamOperationPermissionEnabled: false, createdAt: nowIso(), updatedAt: nowIso() };
+    localStorage.setItem("work-report-mock-system-config-v1", JSON.stringify(config));
+    return config;
+  },
+  async saveSystemConfig(data) {
+    await delay();
+    const raw = localStorage.getItem("work-report-mock-system-config-v1");
+    const existing = raw ? JSON.parse(raw) : { id: "default", teamOperationPermissionEnabled: false, createdAt: nowIso() };
+    const updated = { ...existing, ...data, updatedAt: nowIso() };
+    localStorage.setItem("work-report-mock-system-config-v1", JSON.stringify(updated));
+    return updated;
+  },
 };

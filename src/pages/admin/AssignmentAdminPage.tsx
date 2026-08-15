@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Trash2, Users, Settings, Search, X, UserPlus, Link2, Unlink } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Users, Settings, Search, X, UserPlus, Link2, Unlink, Shield } from "lucide-react";
 import { AdminHeader, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
 import styles from "./AdminPages.module.less";
@@ -7,6 +7,8 @@ import { useTeams } from "./hooks/useTeams";
 import { useTeamOperations } from "./hooks/useTeamOperations";
 import type { TeamInfo, TeamMember } from "./types";
 import { workReportRepository } from "@/api/services/workReport.service";
+import { useWorkReportStore } from "@/store/useWorkReportStore";
+import type { SystemConfig } from "@/domain/work-report";
 
 type Tab = "teams" | "operations";
 
@@ -35,6 +37,37 @@ export default function AssignmentAdminPage() {
 
   const selectedTeam = teams.find((t) => t.id === selectedTeamId) || null;
 
+  const capabilities = useWorkReportStore((s) => s.capabilities);
+  const canViewAdmin = capabilities?.canViewAdmin ?? false;
+
+  const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
+
+  useEffect(() => {
+    if (!canViewAdmin) return;
+    void (async () => {
+      try {
+        const config = await workReportRepository.getSystemConfig();
+        setSystemConfig(config);
+      } catch {
+        /* ignore */
+      } finally {
+        setConfigLoading(false);
+      }
+    })();
+  }, [canViewAdmin]);
+
+  const handleTogglePermission = async () => {
+    if (!systemConfig) return;
+    const next = !systemConfig.teamOperationPermissionEnabled;
+    try {
+      const updated = await workReportRepository.saveSystemConfig({ teamOperationPermissionEnabled: next });
+      setSystemConfig(updated);
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <>
       <AdminHeader title="人员工序映射" description="班组与人员、工序的关系管理" />
@@ -55,6 +88,46 @@ export default function AssignmentAdminPage() {
             <Link2 />
             班组工序映射
           </button>
+          {canViewAdmin && (
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Shield size={16} style={{ color: systemConfig?.teamOperationPermissionEnabled ? "#4a6cf7" : "#999" }} />
+              <span style={{ fontSize: 13, color: "#666" }}>工序领取权限校验</span>
+              {configLoading ? (
+                <span style={{ fontSize: 13, color: "#999" }}>加载中...</span>
+              ) : (
+                <label style={{ position: "relative", display: "inline-block", width: 40, height: 22, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={systemConfig?.teamOperationPermissionEnabled ?? false}
+                    onChange={() => void handleTogglePermission()}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      backgroundColor: systemConfig?.teamOperationPermissionEnabled ? "#4a6cf7" : "#ccc",
+                      borderRadius: 22,
+                      transition: "0.3s"
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      content: "",
+                      height: 16,
+                      width: 16,
+                      left: systemConfig?.teamOperationPermissionEnabled ? 22 : 3,
+                      bottom: 3,
+                      backgroundColor: "#fff",
+                      borderRadius: "50%",
+                      transition: "0.3s"
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          )}
         </div>
 
         {message && <div className={cx(styles["admin-message"])}>{message}</div>}

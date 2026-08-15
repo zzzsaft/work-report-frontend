@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getOperationTimes } from "@/api/http/laborDataClient";
+import { getErrorMessage } from "@/utils/errors";
 import type { ClaimableOperation } from "@/domain/work-report";
 import { useWorkReportStore } from "@/store/useWorkReportStore";
 import { ClaimOperationsPanel } from "./ClaimOperationsPanel";
@@ -63,7 +64,15 @@ export function ClaimOperationsPage() {
       setClaimedOperation(null);
       await loadRecentClaimableOperations();
     } catch (err) {
-      console.error("Failed to claim operation:", err);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const message = getErrorMessage(err);
+      if (status === 403 && message.includes("请联系管理员分配权限")) {
+        clearError();
+        setClaimedOperation(null);
+        window.alert(message);
+      } else {
+        console.error("Failed to claim operation:", err);
+      }
     }
   };
 

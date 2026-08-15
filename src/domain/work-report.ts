@@ -263,6 +263,13 @@ export interface XftImportResult {
   errors: Array<{ row: number; staffName?: string; staffNumber?: string; message: string; errorCode?: string }>;
 }
 
+export interface SystemConfig {
+  id: string;
+  teamOperationPermissionEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DashboardSummary {
   activeOrders: number;
   runningWorkers: number;
