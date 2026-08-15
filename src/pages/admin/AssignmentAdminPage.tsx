@@ -1,58 +1,635 @@
-import { Fragment, useCallback, useState } from "react";
-import { Search, Trash2, UserPlus } from "lucide-react";
-import { workReportRepository } from "@/api/services/workReport.service";
-import { canWorkerRemoveAssignment, type ClaimableOperation, type OperationAssignment, type WorkerSummary } from "@/domain/work-report";
-import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { useWorkReportStore } from "@/store/useWorkReportStore";
-import { AdminHeader, AdminStatus, LoadingTable, SearchBox } from "./adminShared";
+import { useState } from "react";
+import { Plus, Trash2, Users, Settings, Search, X, UserPlus, Link2, Unlink } from "lucide-react";
+import { AdminHeader, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
-import { WorkerPicker } from "./WorkerPicker";
 import styles from "./AdminPages.module.less";
+import { useTeams } from "./hooks/useTeams";
+import { useTeamOperations } from "./hooks/useTeamOperations";
+import type { TeamInfo, TeamMember } from "./types";
+import { workReportRepository } from "@/api/services/workReport.service";
+
+type Tab = "teams" | "operations";
 
 export default function AssignmentAdminPage() {
-  const canAssignWorkers = useWorkReportStore((state) => !!state.capabilities?.canAssignWorkers);
-  const canForceRemoveAssignments = useWorkReportStore((state) => !!state.capabilities?.canForceRemoveAssignments);
-  const [keyword, setKeyword] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState("");
-  const [selectedPart, setSelectedPart] = useState("");
-  const [operations, setOperations] = useState<ClaimableOperation[]>([]);
-  const [assignTargetId, setAssignTargetId] = useState("");
-  const [message, setMessage] = useState("");
-  const loadProducts = useCallback(async () => canAssignWorkers ? (await workReportRepository.searchClaimableProducts(keyword, 1, 20)).items : [], [canAssignWorkers, keyword]);
-  const { data: products = [], loading: productsLoading, reload } = useAsyncResource(loadProducts);
-  const { data: assignments = [], loading: assignmentsLoading, reload: reloadAssignments } = useAsyncResource<OperationAssignment[]>(useCallback(() => workReportRepository.getAssignments(), []));
-  const loadParts = async (productId: string) => {
-    setSelectedProduct(productId);
-    setSelectedPart("");
-    setOperations([]);
+  const [activeTab, setActiveTab] = useState<Tab>("teams");
+  const {
+    teams,
+    loading,
+    selectedTeamId,
+    setSelectedTeamId,
+    selectTeam,
+    members,
+    membersLoading,
+    showCreateModal,
+    setShowCreateModal,
+    editingTeam,
+    setEditingTeam,
+    message,
+    setMessage,
+    createTeam,
+    updateTeam,
+    deleteTeam,
+    addMember,
+    removeMember
+  } = useTeams();
+
+  const selectedTeam = teams.find((t) => t.id === selectedTeamId) || null;
+
+  return (
+    <>
+      <AdminHeader title="人员工序映射" description="班组与人员、工序的关系管理" />
+
+      <div className={cx(styles["tab-container"])}>
+        <div className={cx(styles["tab-header"])}>
+          <button
+            className={cx(styles["tab-btn"], activeTab === "teams" && styles["tab-active"])}
+            onClick={() => setActiveTab("teams")}
+          >
+            <Users />
+            班组管理
+          </button>
+          <button
+            className={cx(styles["tab-btn"], activeTab === "operations" && styles["tab-active"])}
+            onClick={() => setActiveTab("operations")}
+          >
+            <Link2 />
+            班组工序映射
+          </button>
+        </div>
+
+        {message && <div className={cx(styles["admin-message"])}>{message}</div>}
+
+        {activeTab === "teams" ? (
+          <TeamManagementTab
+            teams={teams}
+            loading={loading}
+            selectedTeamId={selectedTeamId}
+            onSelectTeam={selectTeam}
+            members={members}
+            membersLoading={membersLoading}
+            onAddClick={() => setShowCreateModal(true)}
+            onEditClick={(team) => setEditingTeam(team)}
+            onDeleteClick={(team) => {
+              if (confirm(`确定要删除班组"${team.name}"吗？此操作将同时移除班组成员关联和工序映射。`)) {
+                void deleteTeam(team.id);
+              }
+            }}
+            onAddMember={addMember}
+            onRemoveMember={removeMember}
+          />
+        ) : (
+          <TeamOperationsTab
+            teams={teams}
+            selectedTeamId={selectedTeamId}
+            selectedTeam={selectedTeam}
+            onSelectTeam={selectTeam}
+          />
+        )}
+      </div>
+
+      {showCreateModal && (
+        <TeamFormModal
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={(name, desc) => createTeam(name, desc)}
+        />
+      )}
+
+      {editingTeam && (
+        <TeamFormModal
+          team={editingTeam}
+          onClose={() => setEditingTeam(null)}
+          onSubmit={(name, desc) => updateTeam(editingTeam.id, name, desc)}
+        />
+      )}
+    </>
+  );
+}
+
+function TeamManagementTab({
+  teams,
+  loading,
+  selectedTeamId,
+  onSelectTeam,
+  members,
+  membersLoading,
+  onAddClick,
+  onEditClick,
+  onDeleteClick,
+  onAddMember,
+  onRemoveMember
+}: {
+  teams: TeamInfo[];
+  loading: boolean;
+  selectedTeamId: string | null;
+  onSelectTeam: (id: string) => Promise<void>;
+  members: TeamMember[];
+  membersLoading: boolean;
+  onAddClick: () => void;
+  onEditClick: (team: TeamInfo) => void;
+  onDeleteClick: (team: TeamInfo) => void;
+  onAddMember: (teamId: string, userId: string) => Promise<void>;
+  onRemoveMember: (teamId: string, userId: string) => Promise<void>;
+}) {
+  const [showMemberPicker, setShowMemberPicker] = useState(false);
+  const [memberKeyword, setMemberKeyword] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<TeamMember[]>([]);
+  const [focusedTeamId, setFocusedTeamId] = useState<string | null>(null);
+
+  const handleRowClick = (teamId: string) => {
+    if (focusedTeamId === teamId) {
+      // 再次点击同一行：取消聚焦
+      setFocusedTeamId(null);
+    } else {
+      // 首次点击或点击其他行：聚焦该行
+      setFocusedTeamId(teamId);
+    }
+    void onSelectTeam(teamId);
   };
-  const { data: parts = [] } = useAsyncResource(useCallback(() => selectedProduct ? workReportRepository.getClaimableParts(selectedProduct) : Promise.resolve([]), [selectedProduct]));
-  const choosePart = async (partId: string) => {
-    setSelectedPart(partId);
-    setAssignTargetId("");
-    setOperations(await workReportRepository.getClaimableOperations(partId));
+
+  const displayedTeams = focusedTeamId
+    ? teams.filter((t) => t.id === focusedTeamId)
+    : teams;
+
+  const searchMembers = async () => {
+    setSearching(true);
+    try {
+      const result = await workReportRepository.searchWorkers(memberKeyword, 1, 20);
+      setSearchResults(result.items.map((w) => ({
+        id: w.id,
+        name: w.name,
+        employeeNo: w.employeeNo || null,
+        teamName: w.teamName || null,
+        nameInitials: w.nameInitials || null
+      })));
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
   };
-  const assign = async (operation: ClaimableOperation, worker: WorkerSummary) => {
-    if (!canAssignWorkers) {
-      setMessage("当前账号没有员工派工权限。");
+
+  const currentTeam = teams.find((t) => t.id === selectedTeamId);
+  const isUnassigned = currentTeam?.id === "team-unassigned";
+
+  return (
+    <div className={cx(styles["teams-main"])}>
+      <div className={cx(styles["teams-toolbar"])}>
+        <button className={cx(styles["btn-primary"])} onClick={onAddClick}>
+          <Plus />
+          新建班组
+        </button>
+        <select
+          value={selectedTeamId || ""}
+          onChange={(e) => void onSelectTeam(e.target.value)}
+          className={cx(styles["team-select"])}
+        >
+          <option value="">选择班组</option>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        {focusedTeamId && (
+          <>
+            <button
+              className={cx(styles["btn-secondary"])}
+              onClick={() => setFocusedTeamId(null)}
+            >
+              退出聚焦
+            </button>
+            <span style={{ fontSize: 13, color: "#4a6cf7" }}>
+              聚焦模式：仅显示选中班组，再次点击该行可取消
+            </span>
+          </>
+        )}
+      </div>
+
+      {loading ? (
+        <LoadingTable />
+      ) : (
+        <div className={cx(styles["teams-table-wrap"])}>
+          <table>
+            <thead>
+              <tr>
+                <th>班组名称</th>
+                <th>成员数</th>
+                <th>工序数</th>
+                <th style={{ width: 120 }}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayedTeams.map((team) => (
+                <tr
+                  key={team.id}
+                  className={cx(selectedTeamId === team.id && styles["team-row-selected"])}
+                  onClick={() => handleRowClick(team.id)}
+                >
+                  <td>
+                    <strong>{team.name}</strong>
+                  </td>
+                  <td>{team.users.length}</td>
+                  <td>{team.operations.length}</td>
+                  <td>
+                    {team.name !== "未分配班组" && (
+                      <div className={cx(styles["table-actions-row"])}>
+                        <button
+                          className={cx(styles["table-action"])}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditClick(team);
+                          }}
+                          title="编辑"
+                        >
+                          <Settings />
+                        </button>
+                        <button
+                          className={cx(styles["table-action"], styles["danger-text"])}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteClick(team);
+                          }}
+                          title="删除"
+                        >
+                          <Trash2 />
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!teams.length && !focusedTeamId && (
+                <tr>
+                  <td colSpan={4} className={cx(styles["empty-inline"])}>
+                    暂无班组
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {currentTeam && (
+        <div className={cx(styles["teams-content"])}>
+          <div className={cx(styles["content-header"])}>
+            <div>
+              <h2>{currentTeam.name}</h2>
+              {currentTeam.description && <p>{currentTeam.description}</p>}
+            </div>
+            <button
+              className={cx(styles["btn-primary"])}
+              onClick={() => setShowMemberPicker(true)}
+              disabled={isUnassigned}
+            >
+              <UserPlus />
+              添加成员
+            </button>
+          </div>
+
+          {membersLoading ? (
+            <LoadingTable />
+          ) : (
+            <div className={cx(styles["table-wrap"])}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>工号</th>
+                    <th>姓名</th>
+                    <th>姓名首字母</th>
+                    <th>班组</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr key={member.id}>
+                      <td>{member.employeeNo || "—"}</td>
+                      <td>
+                        <strong>{member.name}</strong>
+                      </td>
+                      <td>{member.nameInitials || "—"}</td>
+                      <td>{member.teamName || "—"}</td>
+                      <td>
+                        {!isUnassigned && (
+                          <button
+                            className={cx(styles["table-action"], styles["danger-action"])}
+                            onClick={() => void onRemoveMember(currentTeam.id, member.id)}
+                          >
+                            <Unlink />
+                            移除
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {!members.length && (
+                    <tr>
+                      <td colSpan={5} className={cx(styles["empty-inline"])}>
+                        暂无成员
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showMemberPicker && currentTeam && (
+        <div
+          className={cx(styles["modal-overlay"])}
+          onClick={() => setShowMemberPicker(false)}
+        >
+          <div
+            className={cx(styles["modal-content"], styles["modal-md"])}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={cx(styles["modal-header"])}>
+              <h3>添加成员到 {currentTeam.name}</h3>
+              <button className={cx(styles["modal-close"])} onClick={() => setShowMemberPicker(false)}>
+                <X />
+              </button>
+            </div>
+            <div className={cx(styles["modal-body"])}>
+              <div className={cx(styles["member-picker-search"])}>
+                <input
+                  value={memberKeyword}
+                  onChange={(e) => setMemberKeyword(e.target.value)}
+                  placeholder="搜索姓名/工号"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void searchMembers();
+                  }}
+                />
+                <button className={cx(styles["btn-primary"])} onClick={() => void searchMembers()}>
+                  <Search />
+                </button>
+              </div>
+              {searching ? (
+                <div className={cx(styles["empty-inline"])}>搜索中...</div>
+              ) : (
+                <div className={cx(styles["member-picker-list"])}>
+                  {searchResults.map((worker) => (
+                    <div key={worker.id} className={cx(styles["member-picker-item"])}>
+                      <span>{worker.name.slice(0, 1)}</span>
+                      <div>
+                        <strong>{worker.name}</strong>
+                        <small>
+                          {worker.employeeNo} · {worker.teamName || "无班组"}
+                        </small>
+                      </div>
+                      <button
+                        className={cx(styles["btn-primary"])}
+                        onClick={async () => {
+                          try {
+                            await onAddMember(currentTeam.id, worker.id);
+                            setShowMemberPicker(false);
+                            setMemberKeyword("");
+                            setSearchResults([]);
+                          } catch {
+                            /* error handled by hook */
+                          }
+                        }}
+                      >
+                        添加
+                      </button>
+                    </div>
+                  ))}
+                  {!searchResults.length && !searching && (
+                    <div className={cx(styles["empty-inline"])}>输入关键词搜索人员</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamOperationsTab({
+  teams,
+  selectedTeamId,
+  selectedTeam,
+  onSelectTeam
+}: {
+  teams: TeamInfo[];
+  selectedTeamId: string | null;
+  selectedTeam: TeamInfo | null;
+  onSelectTeam: (id: string) => Promise<void>;
+}) {
+  const isUnassigned = selectedTeamId === "team-unassigned";
+  const {
+    operations,
+    loading,
+    selectedIds,
+    setSelectedIds,
+    message,
+    setMessage: setOpMessage,
+    newOpCode,
+    setNewOpCode,
+    createOperation,
+    deleteOperation,
+    batchDelete,
+    syncOperations,
+    toggleSelect
+  } = useTeamOperations(selectedTeamId);
+
+  return (
+    <div className={cx(styles["operations-layout"])}>
+      <div className={cx(styles["operations-toolbar"])}>
+        <select
+          value={selectedTeamId || ""}
+          onChange={(e) => void onSelectTeam(e.target.value)}
+          className={cx(styles["team-select"])}
+        >
+          <option value="">选择班组</option>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        {selectedTeam && !isUnassigned && (
+          <>
+            <input
+              value={newOpCode}
+              onChange={(e) => setNewOpCode(e.target.value)}
+              placeholder="输入工序编码"
+              className={cx(styles["operation-code-input"])}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void createOperation();
+              }}
+            />
+            <button className={cx(styles["btn-primary"])} onClick={() => void createOperation()}>
+              <Plus />
+              添加工序
+            </button>
+            <button className={cx(styles["btn-secondary"])} onClick={() => void syncOperations()}>
+              同步历史数据
+            </button>
+            {selectedIds.length > 0 && (
+              <button
+                className={cx(styles["danger-action"])}
+                onClick={() => void batchDelete()}
+              >
+                批量删除 ({selectedIds.length})
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {message && <div className={cx(styles["admin-message"])}>{message}</div>}
+
+      {!selectedTeam ? (
+        <div className={cx(styles["empty-state"])}>
+          <Link2 />
+          <p>请先选择一个班组，然后为其配置可执行的工序</p>
+        </div>
+      ) : isUnassigned ? (
+        <div className={cx(styles["empty-state"])}>
+          <Link2 />
+          <p>未分配班组不可配置工序，请选择具体班组</p>
+        </div>
+      ) : loading ? (
+        <LoadingTable />
+      ) : (
+        <div className={cx(styles["table-wrap"])}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>
+                  <input
+                    type="checkbox"
+                    checked={operations.length > 0 && selectedIds.length === operations.length}
+                    onChange={(e) =>
+                      setSelectedIds(e.target.checked ? operations.map((o) => o.id) : [])
+                    }
+                  />
+                </th>
+                <th>工序编码</th>
+                <th>工序名称</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {operations.map((op) => (
+                <tr key={op.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(op.id)}
+                      onChange={() => toggleSelect(op.id)}
+                    />
+                  </td>
+                  <td>
+                    <strong>{op.operationCode}</strong>
+                  </td>
+                  <td>{op.operationName || "—"}</td>
+                  <td>{new Date(op.createdAt).toLocaleString("zh-CN")}</td>
+                  <td>
+                    <button
+                      className={cx(styles["table-action"], styles["danger-action"])}
+                      onClick={() => void deleteOperation(op.id)}
+                    >
+                      <Trash2 />
+                      删除
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!operations.length && (
+                <tr>
+                  <td colSpan={5} className={cx(styles["empty-inline"])}>
+                    该班组暂无关联工序
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamFormModal({
+  team,
+  onClose,
+  onSubmit
+}: {
+  team?: TeamInfo;
+  onClose: () => void;
+  onSubmit: (name: string, description?: string) => Promise<void>;
+}) {
+  const [name, setName] = useState(team?.name || "");
+  const [description, setDescription] = useState(team?.description || "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      setError("班组名称不能为空");
       return;
     }
-    setMessage("");
-    await workReportRepository.adminAssignOperation({ operationId: operation.id, workerId: worker.id, workerName: worker.name });
-    setMessage(`已将 ${operation.operationName} 分配给 ${worker.name}`);
-    setAssignTargetId("");
-    setOperations(await workReportRepository.getClaimableOperations(operation.partId));
-    await reloadAssignments();
-  };
-  const forceRemove = async (assignmentId: string) => {
-    if (!canForceRemoveAssignments) {
-      setMessage("当前账号没有强制移除权限。");
-      return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await onSubmit(name.trim(), description.trim() || undefined);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "操作失败");
+    } finally {
+      setSubmitting(false);
     }
-    const reason = "管理员调整工单项目";
-    await workReportRepository.adminRemoveAssignment(assignmentId, reason);
-    setMessage("已由高级后台移除，并写入报工记录");
-    await reloadAssignments();
   };
-  return <><AdminHeader title="人员工序分配" description="高级后台可分配工序，也可处理已开始或不可自删的工序" action={canAssignWorkers && <div className={cx(styles["admin-inline-actions"])}><SearchBox value={keyword} onChange={setKeyword} /><button className={cx(styles["admin-primary-action"])} onClick={() => void reload()}><Search />搜索</button></div>} />{message && <div className={cx(styles["admin-message"])}>{message}</div>}{canAssignWorkers && <div className={cx(styles["assignment-admin-grid"])}><section className={cx(styles["admin-panel"], styles["settings-card"])}><div className={cx(styles["settings-icon"])}><UserPlus /></div><h2>产品与部件</h2>{productsLoading ? <LoadingTable /> : <div className={cx(styles["admin-choice-list"])}>{products.map((item) => <button key={item.id} className={selectedProduct === item.id ? styles.selected : undefined} onClick={() => void loadParts(item.id)}><strong>{item.productCode}</strong><span>{item.productName}</span></button>)}</div>}<div className={cx(styles["admin-choice-list"], styles["compact"])}>{parts.map((item) => <button key={item.id} className={selectedPart === item.id ? styles.selected : undefined} onClick={() => void choosePart(item.id)}><strong>{item.partCode}</strong><span>{item.partNo && `[${item.partNo}] `}{item.partName}</span></button>)}</div></section><section className={cx(styles["admin-panel"])}><div className={cx(styles["table-wrap"])}><table><thead><tr><th>工序</th><th>部件</th><th>数量</th><th>工时</th><th>已领</th><th>操作</th></tr></thead><tbody>{operations.map((item) => <Fragment key={item.id}><tr><td><strong>{item.operationCode}</strong><small>{item.operationNo && `[${item.operationNo}] `}{item.operationName}</small></td><td>{item.partCode}</td><td>{item.plannedQuantity}</td><td>{item.estimatedHours}</td><td>{item.claimedWorkers}</td><td><button className={cx(styles["table-action"])} disabled={item.status !== "available"} onClick={() => setAssignTargetId((value) => value === item.id ? "" : item.id)}>选择人员</button></td></tr>{assignTargetId === item.id && <tr><td colSpan={6}><WorkerPicker operation={item} onAssigned={(worker) => assign(item, worker)} /></td></tr>}</Fragment>)}{!operations.length && <tr><td colSpan={6}>请选择产品和部件后查看工序。</td></tr>}</tbody></table></div></section></div>}<section className={cx(styles["admin-panel"], styles["chart-panel"])}><div className={cx(styles["panel-heading"])}><div><h2>当前人员工序</h2><p>高级后台可移除已开始、自领或后台分配的异常工序</p></div></div>{assignmentsLoading ? <LoadingTable /> : <div className={cx(styles["table-wrap"])}><table><thead><tr><th>工单</th><th>产品/部件</th><th>工序</th><th>人员</th><th>来源</th><th>状态</th><th>员工可删</th>{canForceRemoveAssignments && <th>高级操作</th>}</tr></thead><tbody>{assignments.map((item) => <tr key={item.id}><td><strong>{item.orderNo}</strong></td><td>{item.productCode}<small>{item.partCode}</small></td><td>{item.operationName}</td><td>{item.collaborators.join(" / ")}</td><td>{item.source === "self_claimed" ? "自主领取" : "后台分配"}</td><td><AdminStatus status={item.status} /></td><td>{canWorkerRemoveAssignment(item) ? "是" : "否"}</td>{canForceRemoveAssignments && <td><button className={cx(styles["table-action"], styles["danger-action"])} onClick={() => void forceRemove(item.id)}><Trash2 />移除</button></td>}</tr>)}</tbody></table></div>}</section></>;
+
+  return (
+    <div className={cx(styles["modal-overlay"])} onClick={onClose}>
+      <div className={cx(styles["modal-content"], styles["modal-sm"])} onClick={(e) => e.stopPropagation()}>
+        <div className={cx(styles["modal-header"])}>
+          <h3>{team ? "编辑班组" : "新建班组"}</h3>
+          <button className={cx(styles["modal-close"])} onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <div className={cx(styles["modal-body"])}>
+          <div className={cx(styles["modal-field"])}>
+            <label>
+              班组名称 <span className={cx(styles["required-mark"])}>*</span>
+            </label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="输入班组名称"
+              autoFocus
+            />
+          </div>
+          <div className={cx(styles["modal-field"])}>
+            <label>描述</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="可选，班组描述信息"
+              rows={3}
+            />
+          </div>
+          {error && <div className={cx(styles["admin-message"])}>{error}</div>}
+        </div>
+        <div className={cx(styles["modal-footer"])}>
+          <button className={cx(styles["table-action"])} onClick={onClose} disabled={submitting}>
+            取消
+          </button>
+          <button className={cx(styles["btn-primary"])} onClick={() => void handleSubmit()} disabled={submitting}>
+            {submitting ? "保存中..." : "保存"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

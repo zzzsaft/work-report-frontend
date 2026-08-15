@@ -84,6 +84,8 @@ export interface OperationAssignment {
   collaborators: string[];
   source: "assigned" | "self_claimed" | "leader_imported";
   canWorkerRemove: boolean;
+  workerId?: string;
+  workerName?: string;
   estimatedHours?: number;
   allocatedHours?: number;
   originalEstimatedHours?: number;
@@ -148,6 +150,14 @@ export interface WorkerSummary {
   nameInitials: string;
   teamName: string;
   activeAssignmentCount: number;
+}
+
+export interface UnmappedWorker {
+  id: string;
+  employeeNo: string;
+  name: string;
+  nameInitials: string;
+  teamName: string;
 }
 
 export interface WorkerPermission extends WorkerSummary {
@@ -263,6 +273,7 @@ export interface DashboardSummary {
 export interface ReportRecord {
   id: string;
   orderNo: string;
+  company?: string;
   productName: string;
   partNo: string;
   partCode: string;
@@ -283,6 +294,15 @@ export interface ReportRecord {
   actualStartAt: string | undefined;
   actualEndAt: string | undefined;
   photos: EvidencePhoto[];
+}
+
+export interface OperationWorkerAssignment {
+  id: string;
+  operationCode: string;
+  operationName: string;
+  workerId: string;
+  workerName: string;
+  createdAt: string;
 }
 
 export interface ProductionException {
@@ -417,12 +437,14 @@ export function canManagePermissions(capabilities?: UserCapabilities | null) {
 }
 
 export function canAccessAdminRoute(capabilities: UserCapabilities | null | undefined, routeKey: AdminRouteKey) {
+  // assignments 页面对所有已登录用户开放
+  if (routeKey === "assignments") return true;
   if (!capabilities?.canViewAdmin) return false;
   const routeAccess: Record<AdminRouteKey, boolean> = {
     dashboard: capabilities.canViewAdmin,
     orders: capabilities.canViewAdmin,
     import: capabilities.canImportOperations,
-    assignments: capabilities.canAssignWorkers || capabilities.canForceRemoveAssignments,
+    assignments: true,
     reports: capabilities.canViewAdmin,
     people: capabilities.canViewAdmin,
     permissions: canManagePermissions(capabilities),

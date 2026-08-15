@@ -41,16 +41,20 @@ export function CapabilityGuard({ children }: { children: ReactNode }) {
   }
 
   if (!capabilities?.canViewAdmin) {
-    if (error) {
-      return (
-        <div className={styles.emptyState}>
-          <h1>无权访问管理后台</h1>
-          <p>{error}</p>
-          <button className={styles.primaryButton} onClick={() => void loadCapabilities({ force: true })}>重试</button>
-        </div>
-      );
+    // assignments 页面对所有已登录用户开放，无需 canViewAdmin
+    const hasAnyRouteAccess = adminRouteOrder.some((routeKey) => canAccessAdminRoute(capabilities, routeKey));
+    if (!hasAnyRouteAccess) {
+      if (error) {
+        return (
+          <div className={styles.emptyState}>
+            <h1>无权访问管理后台</h1>
+            <p>{error}</p>
+            <button className={styles.primaryButton} onClick={() => void loadCapabilities({ force: true })}>重试</button>
+          </div>
+        );
+      }
+      return <NoAdminPermission message="当前账号没有管理后台访问权限。" />;
     }
-    return <NoAdminPermission message="当前账号没有管理后台访问权限。" />;
   }
 
   return children;

@@ -26,7 +26,36 @@ export const realWorkReportRepository: WorkReportRepository = {
   async removeClaimedAssignment(assignmentId) { await workReportClient.delete(`/assignments/${assignmentId}/claim`); },
   async getStatistics(period) { return (await workReportClient.get("/statistics/me", { params: { period } })).data; },
   async getMyReports(period) { return (await workReportClient.get("/reports/me", { params: { period } })).data; },
-  async getStaffStats(period) { return (await workReportClient.get("/admin/staff-stats", { params: { period } })).data; },
+  async getStaffStats(period, operationNames, company) {
+    const params: Record<string, string | string[]> = { period };
+    if (operationNames && operationNames.length) {
+      params.operationNames = operationNames.length === 1 ? operationNames[0] : operationNames;
+    }
+    if (company) params.company = company;
+    return (await workReportClient.get("/admin/staff-stats", { params })).data;
+  },
+  async listOperationNames(period, company) {
+    return (await workReportClient.get("/admin/staff-operation-names", { params: { period, company } })).data;
+  },
+  async getOperationWorkerAssignments(operationCode) {
+    const params = operationCode ? { operationCode } : {};
+    return (await workReportClient.get("/admin/operation-worker-assignments", { params })).data;
+  },
+  async createOperationWorkerAssignment(data) {
+    return (await workReportClient.post("/admin/operation-worker-assignments", data)).data;
+  },
+  async deleteOperationWorkerAssignment(id) {
+    return (await workReportClient.delete(`/admin/operation-worker-assignments/${encodeURIComponent(id)}`)).data;
+  },
+  async batchDeleteOperationWorkerAssignments(ids) {
+    return (await workReportClient.post("/admin/operation-worker-assignments/batch-delete", { ids })).data;
+  },
+  async syncOperationWorkerAssignments() {
+    return (await workReportClient.post("/admin/operation-worker-assignments/sync")).data;
+  },
+  async getUnmappedWorkers(keyword, page, pageSize) {
+    return (await workReportClient.get("/admin/operation-worker-assignments/unmapped-workers", { params: { keyword, page, pageSize } })).data;
+  },
   async getAttendance() { return (await workReportClient.get("/attendance/me")).data; },
   async getDashboard() { return (await workReportClient.get("/admin/dashboard")).data; },
   async getOrders() { return normalizeOrders((await workReportClient.get("/admin/orders", { params: { page: 1, pageSize: 50 } })).data); },
@@ -49,4 +78,23 @@ export const realWorkReportRepository: WorkReportRepository = {
   async importManualXftHours(rows, salaryPeriod) { return (await workReportClient.post("/admin/xft/import-hours/manual", { rows, salaryPeriod })).data; },
   async adminAssignOperation(input: AdminAssignOperationInput) { await workReportClient.post("/admin/assignments", input); },
   async adminRemoveAssignment(assignmentId, reason) { await workReportClient.delete(`/admin/assignments/${assignmentId}`, { data: { reason } }); },
+
+  // Team management
+  async listTeams() { return (await workReportClient.get("/admin/teams")).data; },
+  async createTeam(name, description) { return (await workReportClient.post("/admin/teams", { name, description })).data; },
+  async updateTeam(id, name, description) { return (await workReportClient.put(`/admin/teams/${encodeURIComponent(id)}`, { name, description })).data; },
+  async deleteTeam(id) { return (await workReportClient.delete(`/admin/teams/${encodeURIComponent(id)}`)).data; },
+  async getTeamMembers(teamId) { return (await workReportClient.get(`/admin/teams/${encodeURIComponent(teamId)}/members`)).data; },
+  async addTeamMember(teamId, userId) { await workReportClient.post(`/admin/teams/${encodeURIComponent(teamId)}/members`, { userId }); },
+  async removeTeamMember(teamId, userId) { await workReportClient.delete(`/admin/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`); },
+  async setWorkerTeam(userId, teamId) { await workReportClient.patch(`/admin/workers/${encodeURIComponent(userId)}/team`, { teamId }); },
+
+  // Team operation assignments
+  async listTeamOperations(teamId) { return (await workReportClient.get(`/admin/teams/${encodeURIComponent(teamId)}/operations`)).data; },
+  async createTeamOperation(teamId, operationCode, operationName) {
+    return (await workReportClient.post(`/admin/teams/${encodeURIComponent(teamId)}/operations`, { operationCode, operationName })).data;
+  },
+  async deleteTeamOperation(id) { return (await workReportClient.delete(`/admin/team-operations/${encodeURIComponent(id)}`)).data; },
+  async batchDeleteTeamOperations(ids) { return (await workReportClient.post("/admin/team-operations/batch-delete", { ids })).data; },
+  async syncTeamOperations() { return (await workReportClient.post("/admin/team-operations/sync")).data; },
 };

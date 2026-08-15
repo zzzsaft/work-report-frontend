@@ -6,7 +6,7 @@ const baseURL = getApiBaseUrl("/work-report-api");
 
 export const workReportClient = axios.create({
   baseURL,
-  timeout: 20_000,
+  timeout: 100_000,
   headers: { "Content-Type": "application/json" },
 });
 

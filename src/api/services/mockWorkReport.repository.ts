@@ -7,9 +7,11 @@ import type {
   LeaderImportDraft,
   LaborStatistics,
   OperationAssignment,
+  OperationWorkerAssignment,
   PermissionGroup,
   ProductionException,
   ReportRecord,
+  UnmappedWorker,
   WorkOrder,
   WorkerPermission,
   WorkerSummary,
@@ -248,6 +250,7 @@ interface MockDb {
   workerPermissions: WorkerPermission[];
   reports: ReportRecord[];
   exceptions: ProductionException[];
+  operationWorkerAssignments?: OperationWorkerAssignment[];
 }
 
 const baseAssignment = (status: "assigned" | "running" | "paused" = "running"): OperationAssignment => {
@@ -394,6 +397,7 @@ const load = (): MockDb => {
   }
 };
 const save = (db: MockDb) => localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+const mockReportCompany = (item: ReportRecord) => item.company || (item.orderNo.includes("021") ? "JingyiMT" : "jctimes");
 const normalizeDb = (db: MockDb): MockDb => ({
   ...db,
   workerPermissions: db.workerPermissions || mockWorkers.map((worker) => ({
@@ -549,12 +553,19 @@ export const mockWorkReportRepository: WorkReportRepository = {
       return tb - ta;
     });
   },
-  async getStaffStats(period) {
+  async getStaffStats(period, operationNames, company) {
     await delay();
     const db = load();
     const now = new Date();
+    const names = (operationNames ?? []).map((n) => n.trim().toLowerCase()).filter((n) => n.length > 0);
     const counted = db.reports.filter((item) => {
       if (item.status === "cancelled") return false;
+      if (company && mockReportCompany(item) !== company) return false;
+      if (names.length > 0) {
+        const opName = (item.operationName || "").toLowerCase();
+        const matched = names.some((n) => opName.includes(n));
+        if (!matched) return false;
+      }
       const time = new Date(item.actualEndAt || item.claimedAt || "");
       if (Number.isNaN(time.getTime())) return false;
       if (period === "month") return isSameMonth(time, now);
@@ -583,7 +594,124 @@ export const mockWorkReportRepository: WorkReportRepository = {
       attendanceDays: data.dates.size
     })).sort((a, b) => b.totalHours - a.totalHours);
   },
+  async listOperationNames(period, company) {
+    await delay();
+    const db = load();
+    const now = new Date();
+    const names = new Set<string>();
+    db.reports.forEach((item) => {
+      if (item.status === "cancelled") return;
+      if (company && mockReportCompany(item) !== company) return;
+      if (!item.operationName) return;
+      const time = new Date(item.actualEndAt || item.claimedAt || "");
+      if (Number.isNaN(time.getTime())) return;
+      if (period === "month" && !isSameMonth(time, now)) return;
+      if (period === "lastMonth" && !isPreviousMonth(time, now)) return;
+      names.add(item.operationName);
+    });
+    return Array.from(names).sort();
+  },
   async getAttendance() { await delay(); return [0, 1, 2, 3, 4].map((offset): DailyAttendance => ({ date: `2026-06-${23 - offset}`, shift: "白班", regularHours: 8, overtimeHours: offset === 0 ? .6 : offset === 2 ? 1.2 : 0, attendanceStatus: "normal" })); },
+  async getOperationWorkerAssignments(operationCode) {
+    await delay();
+    const db = load();
+    let result = db.operationWorkerAssignments || [];
+    if (operationCode) {
+      result = result.filter((m) => m.operationCode.toLowerCase().includes(operationCode.toLowerCase()));
+    }
+    return result.slice().sort((a, b) => a.operationCode.localeCompare(b.operationCode) || a.workerName.localeCompare(b.workerName));
+  },
+  async createOperationWorkerAssignment(data) {
+    await delay();
+    const db = load();
+    if (!db.operationWorkerAssignments) db.operationWorkerAssignments = [];
+    const operation = db.claimOperations.find((item) => item.operationCode?.toLowerCase() === data.operationCode.toLowerCase());
+    const operationName = operation?.operationName || "";
+    const existing = db.operationWorkerAssignments.find(
+      (item) => item.operationCode.toLowerCase() === data.operationCode.toLowerCase() && item.workerId === data.workerId
+    );
+    if (existing) throw new Error("该工序与人员的映射已存在");
+    const record: OperationWorkerAssignment = {
+      id: `owk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      operationCode: data.operationCode.toUpperCase(),
+      operationName,
+      workerId: data.workerId,
+      workerName: data.workerName,
+      createdAt: new Date().toISOString()
+    };
+    db.operationWorkerAssignments.push(record);
+    save(db);
+    return record;
+  },
+  async deleteOperationWorkerAssignment(id) {
+    await delay();
+    const db = load();
+    if (!db.operationWorkerAssignments) db.operationWorkerAssignments = [];
+    const before = db.operationWorkerAssignments.length;
+    db.operationWorkerAssignments = db.operationWorkerAssignments.filter((item) => item.id !== id);
+    save(db);
+    return { count: before - db.operationWorkerAssignments.length };
+  },
+  async batchDeleteOperationWorkerAssignments(ids) {
+    await delay();
+    const db = load();
+    if (!db.operationWorkerAssignments) db.operationWorkerAssignments = [];
+    const idSet = new Set(ids);
+    const before = db.operationWorkerAssignments.length;
+    db.operationWorkerAssignments = db.operationWorkerAssignments.filter((item) => !idSet.has(item.id));
+    save(db);
+    return { count: before - db.operationWorkerAssignments.length };
+  },
+  async syncOperationWorkerAssignments() {
+    await delay();
+    const db = load();
+    if (!db.operationWorkerAssignments) db.operationWorkerAssignments = [];
+    const assignments = (db.assignments || []).filter((a) => a.status !== "cancelled");
+    const deduped = new Map<string, { operationCode: string; operationName: string; workerId: string; workerName: string }>();
+    for (const a of assignments) {
+      const workerId = a.workerId || a.id;
+      const workerName = a.workerName || a.collaborators?.[0] || "";
+      if (!workerName) continue;
+      const key = `${a.operationCode}|${workerId}`;
+      if (!deduped.has(key)) {
+        deduped.set(key, { operationCode: a.operationCode, operationName: a.operationName || "", workerId, workerName });
+      }
+    }
+    let upserted = 0;
+    for (const entry of deduped.values()) {
+      const existing = db.operationWorkerAssignments.find(
+        (item) => item.operationCode.toLowerCase() === entry.operationCode.toLowerCase() && item.workerId === entry.workerId
+      );
+      if (existing) {
+        existing.operationName = entry.operationName;
+        existing.workerName = entry.workerName;
+      } else {
+        db.operationWorkerAssignments.push({
+          id: `owk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          operationCode: entry.operationCode,
+          operationName: entry.operationName,
+          workerId: entry.workerId,
+          workerName: entry.workerName,
+          createdAt: new Date().toISOString()
+        });
+      }
+      upserted++;
+    }
+    save(db);
+    return { count: upserted };
+  },
+  async getUnmappedWorkers(keyword, page, pageSize) {
+    await delay();
+    const db = load();
+    const mappedIds = new Set((db.operationWorkerAssignments || []).map((r) => r.workerId));
+    const key = keyword.trim().toLowerCase();
+    const filtered = mockWorkers
+      .filter((w) => !mappedIds.has(w.id))
+      .filter((w) => !key || `${w.employeeNo}${w.name}${w.nameInitials}${w.teamName}`.toLowerCase().includes(key))
+      .map(({ id, employeeNo, name, nameInitials, teamName }): UnmappedWorker => ({ id, employeeNo, name, nameInitials, teamName }));
+    const start = Math.max(0, (page - 1) * pageSize);
+    return { items: filtered.slice(start, start + pageSize), total: filtered.length };
+  },
   async getDashboard() { await delay(); const db = load(); return { activeOrders: db.orders.filter((x) => x.status === "in_progress").length, runningWorkers: 18, todayHours: 146.5, exceptionCount: db.exceptions.filter((x) => x.status === "open").length }; },
   async getOrders() { await delay(); return load().orders; },
   async searchWorkers(keyword, page, pageSize) {
@@ -615,6 +743,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     let reports = load().reports.filter((item) => item.status !== "cancelled");
     const keyword = (filters?.keyword || "").trim().toLowerCase();
     const orderNo = (filters?.orderNo || "").trim().toLowerCase();
+    const company = filters?.company || "";
     const operatorName = (filters?.operatorName || "").trim().toLowerCase();
     const status = filters?.status || "";
     const opCode = filters?.operationCode || "";
@@ -626,6 +755,9 @@ export const mockWorkReportRepository: WorkReportRepository = {
     }
     if (orderNo) {
       reports = reports.filter((item) => item.orderNo.toLowerCase().includes(orderNo));
+    }
+    if (company) {
+      reports = reports.filter((item) => mockReportCompany(item) === company);
     }
     if (operatorName) {
       reports = reports.filter((item) => item.operatorName.toLowerCase().includes(operatorName));
@@ -751,4 +883,247 @@ export const mockWorkReportRepository: WorkReportRepository = {
     save(db);
   },
   async resetDemo(scenario = "running") { await delay(100); save(initialDb(scenario)); },
+
+  // Team management
+  async listTeams() {
+    await delay();
+    const db = load();
+    if (!db.teams || db.teams.length === 0) {
+      db.teams = [];
+      save(db);
+    }
+    // Build result: unassigned team + real teams (sorted by name asc like backend)
+    const unassignedTeam = {
+      id: "team-unassigned",
+      name: "未分配班组",
+      description: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      users: mockWorkers.filter((w) => !w.teamName).map((w) => ({
+        id: w.id, name: w.name, employeeNo: w.employeeNo, teamName: w.teamName
+      })),
+      operations: []
+    };
+    const sortedTeams = [...db.teams].sort((a, b) => a.name.localeCompare(b.name));
+    const realTeams = sortedTeams.map((team) => {
+      const teamWorkers = mockWorkers.filter((w) => w.teamName === team.name);
+      const teamOps = (db.teamOperationAssignments || []).filter((toa) => toa.teamId === team.id);
+      return {
+        ...team,
+        users: teamWorkers.map((w) => ({ id: w.id, name: w.name, employeeNo: w.employeeNo, teamName: w.teamName })),
+        operations: teamOps.map((toa) => ({ id: toa.id, operationCode: toa.operationCode, operationName: toa.operationName }))
+      };
+    });
+    return [unassignedTeam, ...realTeams];
+  },
+  async createTeam(name, description) {
+    await delay();
+    if (name === "未分配班组") throw new Error('不能创建名为"未分配班组"的班组');
+    const db = load();
+    if (!db.teams) db.teams = [];
+    const existing = db.teams.find((t) => t.name === name);
+    if (existing) throw new Error(`班组"${name}"已存在`);
+    const team = {
+      id: `team-${Date.now()}`,
+      name,
+      description: description || null,
+      createdAt: new Date().toISOString(),
+      users: [],
+      operations: []
+    };
+    db.teams.push(team);
+    save(db);
+    return team;
+  },
+  async updateTeam(id, name, description) {
+    await delay();
+    const db = load();
+    if (!db.teams) db.teams = [];
+    const team = db.teams.find((t) => t.id === id);
+    if (!team) throw new Error("班组不存在");
+    const existing = db.teams.find((t) => t.name === name && t.id !== id);
+    if (existing) throw new Error(`班组"${name}"已存在`);
+    const oldName = team.name;
+    team.name = name;
+    team.description = description || null;
+    // Sync teamName for all workers in this team
+    if (oldName !== name) {
+      mockWorkers.forEach((w) => {
+        if (w.teamName === oldName) w.teamName = name;
+      });
+    }
+    save(db);
+    return team;
+  },
+  async deleteTeam(id) {
+    await delay();
+    if (id === "team-unassigned") throw new Error("默认班组不可删除");
+    const db = load();
+    if (!db.teams) db.teams = [];
+    const team = db.teams.find((t) => t.id === id);
+    if (!team) throw new Error("班组不存在");
+    db.teams = db.teams.filter((t) => t.id !== id);
+    // Move workers back to unassigned (clear teamName)
+    mockWorkers.forEach((w) => {
+      if (w.teamName === team.name) w.teamName = undefined;
+    });
+    // Remove team operations
+    if (db.teamOperationAssignments) {
+      db.teamOperationAssignments = db.teamOperationAssignments.filter((toa) => toa.teamId !== id);
+    }
+    save(db);
+    return { count: 1 };
+  },
+  async getTeamMembers(teamId) {
+    await delay();
+    if (teamId === "team-unassigned") {
+      return mockWorkers
+        .filter((w) => !w.teamName)
+        .map((w) => ({
+          id: w.id,
+          name: w.name,
+          employeeNo: w.employeeNo,
+          teamName: w.teamName,
+          nameInitials: w.nameInitials
+        }));
+    }
+    const db = load();
+    const team = (db.teams || []).find((t) => t.id === teamId);
+    if (!team) throw new Error("班组不存在");
+    return mockWorkers
+      .filter((w) => w.teamName === team.name)
+      .map((w) => ({
+        id: w.id,
+        name: w.name,
+        employeeNo: w.employeeNo,
+        teamName: w.teamName,
+        nameInitials: w.nameInitials
+      }));
+  },
+  async addTeamMember(teamId, userId) {
+    await delay();
+    if (teamId === "team-unassigned") throw new Error("不能添加成员到未分配班组");
+    const db = load();
+    const team = (db.teams || []).find((t) => t.id === teamId);
+    if (!team) throw new Error("班组不存在");
+    const worker = mockWorkers.find((w) => w.id === userId);
+    if (!worker) throw new Error("用户不存在");
+    worker.teamName = team.name;
+    save(db);
+  },
+  async removeTeamMember(teamId, userId) {
+    await delay();
+    if (teamId === "team-unassigned") throw new Error("未分配班组的成员已在未分配状态");
+    const db = load();
+    const team = (db.teams || []).find((t) => t.id === teamId);
+    if (!team) throw new Error("班组不存在");
+    const worker = mockWorkers.find((w) => w.id === userId);
+    if (!worker) throw new Error("用户不存在");
+    if (worker.teamName !== team.name) throw new Error("该用户不在此班组");
+    worker.teamName = undefined;
+    save(db);
+  },
+  async setWorkerTeam(userId, teamId) {
+    await delay();
+    const worker = mockWorkers.find((w) => w.id === userId);
+    if (!worker) throw new Error("用户不存在");
+    if (teamId && teamId !== "team-unassigned") {
+      const team = (load().teams || []).find((t) => t.id === teamId);
+      if (!team) throw new Error("班组不存在");
+      worker.teamName = team.name;
+    } else {
+      worker.teamName = undefined;
+    }
+    save(load());
+  },
+
+  // Team operation assignments
+  async listTeamOperations(teamId) {
+    await delay();
+    const db = load();
+    if (!db.teamOperationAssignments) db.teamOperationAssignments = [];
+    return db.teamOperationAssignments.filter((toa) => toa.teamId === teamId);
+  },
+  async createTeamOperation(teamId, operationCode, operationName) {
+    await delay();
+    const db = load();
+    if (!db.teamOperationAssignments) db.teamOperationAssignments = [];
+    const code = operationCode.toUpperCase();
+    const existing = db.teamOperationAssignments.find((toa) => toa.teamId === teamId && toa.operationCode === code);
+    if (existing) {
+      existing.operationName = operationName || existing.operationName;
+      save(db);
+      return existing;
+    }
+    const record = {
+      id: `toa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      teamId,
+      operationCode: code,
+      operationName: operationName || "",
+      createdAt: new Date().toISOString()
+    };
+    db.teamOperationAssignments.push(record);
+    save(db);
+    return record;
+  },
+  async deleteTeamOperation(id) {
+    await delay();
+    const db = load();
+    if (!db.teamOperationAssignments) db.teamOperationAssignments = [];
+    const before = db.teamOperationAssignments.length;
+    db.teamOperationAssignments = db.teamOperationAssignments.filter((toa) => toa.id !== id);
+    save(db);
+    return { count: before - db.teamOperationAssignments.length };
+  },
+  async batchDeleteTeamOperations(ids) {
+    await delay();
+    const db = load();
+    if (!db.teamOperationAssignments) db.teamOperationAssignments = [];
+    const idSet = new Set(ids);
+    const before = db.teamOperationAssignments.length;
+    db.teamOperationAssignments = db.teamOperationAssignments.filter((toa) => !idSet.has(toa.id));
+    save(db);
+    return { count: before - db.teamOperationAssignments.length };
+  },
+  async syncTeamOperations() {
+    await delay();
+    const db = load();
+    if (!db.teamOperationAssignments) db.teamOperationAssignments = [];
+    if (!db.teams) db.teams = [];
+    // Derive from assignments (领取记录) instead of operationWorkerAssignments
+    const teamOps = new Map<string, { operationCode: string; operationName: string }[]>();
+    for (const a of db.assignments) {
+      if (a.status === "cancelled") continue;
+      const workerId = a.workerId || a.id;
+      const worker = mockWorkers.find((w) => w.id === workerId);
+      if (!worker?.teamName) continue;
+      const team = db.teams.find((t) => t.name === worker.teamName);
+      if (!team) continue;
+      if (!teamOps.has(team.id)) teamOps.set(team.id, []);
+      const ops = teamOps.get(team.id)!;
+      if (!ops.some((o) => o.operationCode === a.operationCode)) {
+        ops.push({ operationCode: a.operationCode, operationName: a.operationName });
+      }
+    }
+    let upserted = 0;
+    for (const [teamId, ops] of teamOps) {
+      for (const op of ops) {
+        const existing = db.teamOperationAssignments.find((toa) => toa.teamId === teamId && toa.operationCode === op.operationCode);
+        if (!existing) {
+          db.teamOperationAssignments.push({
+            id: `toa-sync-${Date.now()}-${upserted}`,
+            teamId,
+            operationCode: op.operationCode,
+            operationName: op.operationName,
+            createdAt: new Date().toISOString()
+          });
+          upserted++;
+        } else {
+          existing.operationName = op.operationName;
+        }
+      }
+    }
+    save(db);
+    return { count: upserted };
+  },
 };

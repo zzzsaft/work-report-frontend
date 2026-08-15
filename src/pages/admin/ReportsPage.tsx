@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Check, Download, Edit3, Search, X } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
 import { allocationMethodLabel, formatAllocationBasisHours, formatAllocationRatio, formatHours, getAllocatedHours, getOriginalEstimatedHours, hourAllocationFallbackText, hourAllocationTooltip, type ReportRecord } from "@/domain/work-report";
@@ -6,19 +6,21 @@ import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { AdminError, AdminHeader, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
 import { loadReportsForCsvExport, escapeCsvField } from "./reportExport";
+import { companyOptions, type CompanyFilter } from "./types";
 import styles from "./AdminPages.module.less";
 
 export default function ReportsPage() {
   const [filters, setFilters] = useState<{
     keyword: string;
     orderNo: string;
+    company: CompanyFilter;
     operatorName: string;
     status: string;
     operationCode: string;
     operationName: string;
     startTime: string;
     endTime: string;
-  }>({ keyword: "", orderNo: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" });
+  }>({ keyword: "", orderNo: "", company: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [total, setTotal] = useState(0);
@@ -27,14 +29,15 @@ export default function ReportsPage() {
   const [editingHours, setEditingHours] = useState("");
   const [message, setMessage] = useState("");
   const [exporting, setExporting] = useState(false);
+  const reportFilters = useMemo(() => ({ ...filters, company: filters.company || undefined }), [filters]);
   const load = useCallback(async () => {
-    const data = await workReportRepository.getReports({ ...filters, page, pageSize });
+    const data = await workReportRepository.getReports({ ...reportFilters, page, pageSize });
     setTotal(data.total);
     setPage(data.page);
     setPageSize(Math.min(100, Math.max(1, data.pageSize)));
     setHasMore(data.hasMore);
     return data.items;
-  }, [filters, page, pageSize]);
+  }, [reportFilters, page, pageSize]);
   const { data: reports = [], loading, error, reload } = useAsyncResource<ReportRecord[]>(load);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -45,7 +48,7 @@ export default function ReportsPage() {
 
   const handleResetFilters = () => {
     setPage(1);
-    setFilters({ keyword: "", orderNo: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" });
+    setFilters({ keyword: "", orderNo: "", company: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" });
   };
 
   const handlePageSizeChange = (value: string) => {
@@ -87,7 +90,7 @@ export default function ReportsPage() {
     setExporting(true);
     setMessage("");
     try {
-      const exportReports = await loadReportsForCsvExport(workReportRepository, filters, total);
+      const exportReports = await loadReportsForCsvExport(workReportRepository, reportFilters, total);
       const headers = ["工单", "产品名称", "产品编号", "部件序号", "部件号", "部件名称", "工序号", "工序名称", "工艺内容", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
       const rows = exportReports.map((item) => [
         escapeCsvField(item.orderNo),
@@ -141,6 +144,12 @@ export default function ReportsPage() {
         <div className={cx(styles["filter-input"])}>
           <label>工单编号</label>
           <input type="text" value={filters.orderNo} onChange={(e) => handleFilterChange("orderNo", e.target.value)} placeholder="工单编号" />
+        </div>
+        <div className={cx(styles["filter-select"])}>
+          <label>公司</label>
+          <select value={filters.company} onChange={(e) => handleFilterChange("company", e.target.value as CompanyFilter)}>
+            {companyOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
+          </select>
         </div>
         <div className={cx(styles["filter-input"])}>
           <label>人员姓名</label>
