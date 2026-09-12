@@ -70,6 +70,18 @@ export interface StaffStat {
   attendanceDays: number;
 }
 
+export interface TeamOperationStat {
+  teamName: string;
+  workerId: string;
+  workerName: string;
+  operationName: string;
+  totalPlannedHours: number;
+  totalActualHours: number;
+  deviationHours: number;
+  monthPlannedHours: number;
+  monthActualHours: number;
+}
+
 export interface TeamInfo {
   id: string;
   name: string;
@@ -116,11 +128,12 @@ export interface WorkReportRepository {
   searchClaimableProducts(keyword: string, page: number, pageSize: number): Promise<PaginatedResult<ClaimableProduct>>;
   getClaimableParts(productId: string): Promise<ClaimablePart[]>;
   getClaimableOperations(partId: string): Promise<ClaimableOperation[]>;
-  claimOperation(operationId: string, input?: { startTime?: string; endTime?: string }): Promise<OperationAssignment>;
+  claimOperation(operationId: string, input?: { startTime?: string; endTime?: string; quantity?: number }): Promise<OperationAssignment>;
   removeClaimedAssignment(assignmentId: string): Promise<void>;
   getStatistics(period: LaborStatistics["period"]): Promise<LaborStatistics>;
   getMyReports(period: LaborStatistics["period"]): Promise<ReportRecord[]>;
   getStaffStats(period: "month" | "lastMonth", operationNames?: string[], company?: CompanyCode): Promise<StaffStat[]>;
+  getTeamOperationStats(company?: CompanyCode, teamName?: string): Promise<TeamOperationStat[]>;
   listOperationNames(period: "month" | "lastMonth", company?: CompanyCode): Promise<string[]>;
   getOperationWorkerAssignments(operationCode?: string): Promise<OperationWorkerAssignment[]>;
   createOperationWorkerAssignment(data: { operationCode: string; workerId: string; workerName: string }): Promise<OperationWorkerAssignment>;

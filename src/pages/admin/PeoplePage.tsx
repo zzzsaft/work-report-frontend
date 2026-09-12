@@ -1,9 +1,186 @@
-import { Search, ChevronDown, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, ChevronDown, X, Download } from "lucide-react";
+import { workReportRepository } from "@/api/services/workReport.service";
 import { AdminHeader, AdminError, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
 import styles from "./AdminPages.module.less";
 import { companyOptions, type CompanyFilter } from "./types";
 import { useStaffStats } from "./hooks/useStaffStats";
+import { useTeamOperationStats } from "./hooks/useTeamOperationStats";
+import { buildTeamOperationStatsCsv } from "./reportExport";
+
+function TeamOperationStatsSection() {
+  const [queryCompany, setQueryCompany] = useState<CompanyFilter>("");
+  const [queryTeam, setQueryTeam] = useState("");
+  const { rows, loading, error, reload } = useTeamOperationStats(queryCompany, queryTeam);
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    workReportRepository.listTeams().then((list) => {
+      if (!cancelled) setTeams(list.map((team) => ({ id: team.id, name: team.name })));
+    }).catch(() => {
+      if (!cancelled) setTeams([]);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleExport = () => {
+    if (!rows.length) return;
+    setExporting(true);
+    try {
+      const csvContent = buildTeamOperationStatsCsv(rows);
+      const blob = new Blob([String.fromCharCode(0xfeff) + csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      const companyLabel = queryCompany ? `_${queryCompany === "jctimes" ? "精诚" : "精艺"}` : "";
+      const teamLabel = queryTeam ? `_${queryTeam}` : "";
+      link.download = `班组工序工时偏差${companyLabel}${teamLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.planned += row.totalPlannedHours;
+      acc.actual += row.totalActualHours;
+      acc.monthPlanned += row.monthPlannedHours;
+      acc.monthActual += row.monthActualHours;
+      return acc;
+    },
+    { planned: 0, actual: 0, monthPlanned: 0, monthActual: 0 }
+  );
+
+  return (
+    <>
+      <div className={cx(styles["content-header"])}>
+        <div>
+          <h2>班组工序工时偏差</h2>
+          <p>按班组-人员-工序统计累计与当月的计划/实际工时，偏差值 = 实际报工工时 − 总计划工时</p>
+        </div>
+        <button
+          className={cx(styles["export-csv-btn"])}
+          onClick={handleExport}
+          disabled={exporting || loading || rows.length === 0}
+        >
+          <Download />
+          {exporting ? "导出中..." : "导出CSV"}
+        </button>
+      </div>
+      <div className={cx(styles["reports-filter"])} style={{ marginBottom: 12 }}>
+        <div className={cx(styles["filter-select"])}>
+          <label>公司</label>
+          <select value={queryCompany} onChange={(e) => setQueryCompany(e.target.value as CompanyFilter)}>
+            {companyOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
+          </select>
+        </div>
+        <div className={cx(styles["filter-select"])}>
+          <label>班组</label>
+          <select value={queryTeam} onChange={(e) => setQueryTeam(e.target.value)}>
+            <option value="">全部班组</option>
+            {teams.map((team) => <option key={team.id} value={team.name}>{team.name}</option>)}
+          </select>
+        </div>
+      </div>
+      {loading ? (
+        <LoadingTable />
+      ) : error ? (
+        <AdminError message={error} retry={() => void reload()} />
+      ) : rows.length === 0 ? (
+        <section className={cx(styles["admin-panel"])}>
+          <div className={styles["empty-inline"]}>暂无可统计的报工数据</div>
+        </section>
+      ) : (
+        <section className={cx(styles["admin-panel"])}>
+          <div className={styles["table-wrap"]}>
+            <table>
+              <thead>
+                <tr>
+                  <th>班组</th>
+                  <th>生产人员</th>
+                  <th>工序名称</th>
+                  <th>总计划工时</th>
+                  <th>实际报工工时</th>
+                  <th>偏差值</th>
+                  <th>当月计划工时</th>
+                  <th>当月实际工时</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const positive = row.deviationHours > 0;
+                  const negative = row.deviationHours < 0;
+                  return (
+                    <tr key={`${row.workerId}-${row.operationName}`}>
+                      <td>{row.teamName}</td>
+                      <td>
+                        <strong>{row.workerName}</strong>
+                      </td>
+                      <td>{row.operationName}</td>
+                      <td>{row.totalPlannedHours.toFixed(1)}h</td>
+                      <td>{row.totalActualHours.toFixed(1)}h</td>
+                      <td>
+                        <strong
+                          style={{
+                            color: positive ? "#d83931" : negative ? "#1a9c54" : "#333"
+                          }}
+                        >
+                          {positive ? "+" : ""}
+                          {row.deviationHours.toFixed(1)}h
+                        </strong>
+                      </td>
+                      <td>{row.monthPlannedHours.toFixed(1)}h</td>
+                      <td>{row.monthActualHours.toFixed(1)}h</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3}>
+                    <strong>合计</strong>
+                  </td>
+                  <td>
+                    <strong>{totals.planned.toFixed(1)}h</strong>
+                  </td>
+                  <td>
+                    <strong>{totals.actual.toFixed(1)}h</strong>
+                  </td>
+                  <td>
+                    <strong
+                      style={{
+                        color:
+                          totals.actual - totals.planned > 0
+                            ? "#d83931"
+                            : totals.actual - totals.planned < 0
+                              ? "#1a9c54"
+                              : "#333"
+                      }}
+                    >
+                      {(totals.actual - totals.planned > 0 ? "+" : "") +
+                        (totals.actual - totals.planned).toFixed(1)}
+                      h
+                    </strong>
+                  </td>
+                  <td>
+                    <strong>{totals.monthPlanned.toFixed(1)}h</strong>
+                  </td>
+                  <td>
+                    <strong>{totals.monthActual.toFixed(1)}h</strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
 
 export default function PeoplePage() {
   const {
@@ -209,6 +386,9 @@ export default function PeoplePage() {
           </section>
         </>
       )}
+      <div style={{ marginTop: 24 }}>
+        <TeamOperationStatsSection />
+      </div>
     </>
   );
 }

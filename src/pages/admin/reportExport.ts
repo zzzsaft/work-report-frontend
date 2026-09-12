@@ -1,4 +1,4 @@
-import type { ReportFilters, WorkReportRepository } from "@/api/services/workReport.repository";
+import type { ReportFilters, TeamOperationStat, WorkReportRepository } from "@/api/services/workReport.repository";
 import type { ReportRecord } from "@/domain/work-report";
 
 const maxReportExportPageSize = 100;
@@ -24,4 +24,51 @@ export async function loadReportsForCsvExport(
     rows.push(...result.items);
     if (!result.hasMore || rows.length >= result.total) return rows;
   }
+}
+
+export function buildTeamOperationStatsCsv(rows: TeamOperationStat[]): string {
+  const headers = [
+    "班组",
+    "生产人员",
+    "工序名称",
+    "总计划工时",
+    "实际报工工时",
+    "偏差值",
+    "当月计划工时",
+    "当月实际工时"
+  ];
+
+  const dataRows = rows.map((row) => [
+    escapeCsvField(row.teamName),
+    escapeCsvField(row.workerName),
+    escapeCsvField(row.operationName),
+    row.totalPlannedHours.toFixed(2),
+    row.totalActualHours.toFixed(2),
+    row.deviationHours.toFixed(2),
+    row.monthPlannedHours.toFixed(2),
+    row.monthActualHours.toFixed(2)
+  ]);
+
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.totalPlanned += row.totalPlannedHours;
+      acc.totalActual += row.totalActualHours;
+      acc.monthPlanned += row.monthPlannedHours;
+      acc.monthActual += row.monthActualHours;
+      return acc;
+    },
+    { totalPlanned: 0, totalActual: 0, monthPlanned: 0, monthActual: 0 }
+  );
+  const summaryRow = [
+    escapeCsvField("合计"),
+    "",
+    "",
+    totals.totalPlanned.toFixed(2),
+    totals.totalActual.toFixed(2),
+    (totals.totalActual - totals.totalPlanned).toFixed(2),
+    totals.monthPlanned.toFixed(2),
+    totals.monthActual.toFixed(2)
+  ];
+
+  return [headers.join(","), ...dataRows.map((row) => row.join(",")), summaryRow.join(",")].join("\n");
 }

@@ -53,14 +53,15 @@ export function ClaimOperationsPage() {
     return () => { cancelled = true; };
   }, [claimedOperation]);
 
-  const handleConfirmClaim = async (startAt: string, endAt: string) => {
+  const handleConfirmClaim = async (startAt: string, endAt: string, quantity: number) => {
     if (!claimedOperation) return;
     if (!startAt || !endAt || new Date(startAt).getTime() > new Date(endAt).getTime()) return;
+    if (!Number.isInteger(quantity) || quantity < 1) return;
     try {
       await loadAssignments();
       const assignments = useWorkReportStore.getState().assignments;
       if (shouldConfirmRepeatedClaim(assignments, claimedOperation) && !window.confirm("之前已领取过该工序，是否再次领取？")) return;
-      await claimOperation(claimedOperation.id, { startTime: startAt, endTime: endAt });
+      await claimOperation(claimedOperation.id, { startTime: startAt, endTime: endAt, quantity });
       setClaimedOperation(null);
       await loadRecentClaimableOperations();
     } catch (err) {

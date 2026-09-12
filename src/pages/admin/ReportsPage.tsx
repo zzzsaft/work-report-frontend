@@ -29,7 +29,8 @@ export default function ReportsPage() {
   const [editingHours, setEditingHours] = useState("");
   const [message, setMessage] = useState("");
   const [exporting, setExporting] = useState(false);
-  const reportFilters = useMemo(() => ({ ...filters, company: filters.company || undefined }), [filters]);
+  const [appliedFilters, setAppliedFilters] = useState(filters);
+  const reportFilters = useMemo(() => ({ ...appliedFilters, company: appliedFilters.company || undefined }), [appliedFilters]);
   const load = useCallback(async () => {
     const data = await workReportRepository.getReports({ ...reportFilters, page, pageSize });
     setTotal(data.total);
@@ -42,13 +43,19 @@ export default function ReportsPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
-    setPage(1);
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleResetFilters = () => {
+  const handleSearch = () => {
     setPage(1);
-    setFilters({ keyword: "", orderNo: "", company: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" });
+    setAppliedFilters(filters);
+  };
+
+  const handleResetFilters = () => {
+    const empty: typeof filters = { keyword: "", orderNo: "", company: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" };
+    setPage(1);
+    setFilters(empty);
+    setAppliedFilters(empty);
   };
 
   const handlePageSizeChange = (value: string) => {
@@ -102,7 +109,7 @@ export default function ReportsPage() {
         escapeCsvField(item.operationCode),
         escapeCsvField(item.operationName),
         escapeCsvField(item.operationNote || ""),
-        1,
+        escapeCsvField(item.plannedQuantity),
         escapeCsvField(formatHours(getAllocatedHours(item))),
         escapeCsvField(formatHours(getOriginalEstimatedHours(item))),
         escapeCsvField(item.operatorName),
@@ -179,7 +186,7 @@ export default function ReportsPage() {
           <input type="date" value={filters.endTime} onChange={(e) => handleFilterChange("endTime", e.target.value)} />
         </div>
         <div className={cx(styles["filter-actions"])}>
-          <button className={cx(styles["filter-search-btn"])} onClick={() => void reload()}><Search />搜索</button>
+          <button className={cx(styles["filter-search-btn"])} onClick={handleSearch}><Search />搜索</button>
           <button className={cx(styles["filter-reset-btn"])} onClick={handleResetFilters}>重置</button>
         </div>
       </div>
@@ -193,6 +200,7 @@ export default function ReportsPage() {
               <th style={{ width: 110 }}>部件</th>
               <th style={{ width: 120 }}>工序</th>
               <th style={{ width: 140 }}>工艺内容</th>
+              <th style={{ width: 70 }}>数量</th>
               <th style={{ width: 100 }}>分摊工时</th>
               <th style={{ width: 80 }}>原工时</th>
               <th style={{ width: 80 }}>领取人员</th>
@@ -215,6 +223,7 @@ export default function ReportsPage() {
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></td>
               <td className={cx(styles["operation-note-cell"])} title={(item.operationNote || "").replace(/\n/g, " ")}>{(item.operationNote || "").replace(/\n/g, " ") || "-"}</td>
+              <td><strong>{item.plannedQuantity}</strong></td>
               <td><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <span className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</span>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></td>
               <td><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></td>
               <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
@@ -235,7 +244,7 @@ export default function ReportsPage() {
               </td>
             </tr>);
             })}
-            {!reports.length && <tr><td colSpan={15}>没有匹配的报工记录。</td></tr>}
+            {!reports.length && <tr><td colSpan={16}>没有匹配的报工记录。</td></tr>}
           </tbody>
         </table>
       </div>

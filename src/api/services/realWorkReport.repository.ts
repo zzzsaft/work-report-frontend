@@ -34,6 +34,9 @@ export const realWorkReportRepository: WorkReportRepository = {
     if (company) params.company = company;
     return (await workReportClient.get("/admin/staff-stats", { params })).data;
   },
+  async getTeamOperationStats(company, teamName) {
+    return (await workReportClient.get("/admin/team-operation-stats", { params: { company, teamName } })).data;
+  },
   async listOperationNames(period, company) {
     return (await workReportClient.get("/admin/staff-operation-names", { params: { period, company } })).data;
   },
