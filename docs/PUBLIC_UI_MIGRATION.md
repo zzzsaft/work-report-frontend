@@ -2,7 +2,7 @@
 
 ## 依赖与主题
 
-应用固定消费 npmjs 公共包 `@jc-times/business-ui@0.2.43`，React 19 保持不变，Lucide 固定为公共库 peer 范围内的 `0.468.0`。项目不再配置 GitHub Packages 源，其他电脑可直接通过 `npm ci` 安装，无需包读取 Token。
+应用固定消费 npmjs 公共包 `@jc-times/business-ui@0.2.43`，React 19 保持不变，Lucide 固定为公共库 peer 范围内的 `0.468.0`。项目 `.npmrc` 只把 `@jc-times` 指向 npm 官方源，并禁止 npm 将锁文件地址替换为本机镜像；不含任何凭据。其他电脑可直接通过 `npm ci` 安装，无需包读取 Token。
 
 `src/main.tsx` 首先加载公共样式，随后加载应用样式。`src/styles/business-ui.css` 将公共语义令牌映射到现有蓝色主题、文字、画布和成功/警告/危险色。页面布局和移动端大触控尺寸继续由应用决定。
 
@@ -56,4 +56,4 @@
 ## 2026-09-14 切换至 npmjs
 
 - npmjs 已公开发布 `@jc-times/business-ui@0.2.43`；项目升级到该精确版本并更新锁文件。
-- 删除仅用于 GitHub Packages 的项目 `.npmrc`，锁文件制品地址改为 `registry.npmjs.org`，安装不再需要 GitHub Packages Token。
+- 移除 GitHub Packages 源，锁文件制品地址改为 `registry.npmjs.org`，安装不再需要 GitHub Packages Token。项目保留无凭据 `.npmrc`，避免使用 npmmirror 的电脑把新发布包重写到尚未同步的镜像地址。
