@@ -290,6 +290,7 @@ export interface ReportRecord {
   operationNote: string;
   operatorName: string;
   status: OperationStatus;
+  plannedQuantity: number;
   claimedAt: string | undefined;
   estimatedHours: number;
   allocatedHours?: number;

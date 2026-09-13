@@ -136,6 +136,10 @@ test("claim dates and repeated-claim confirmation preserve the submitted operati
   await page.getByRole("button", { name: "领取工序", exact: true }).click();
   await expect(page.getByRole("heading", { name: "工序确认" })).toBeVisible();
   await expect(page.getByRole("button", { name: "确认领取" })).toBeEnabled();
+  const quantity = page.getByLabel("报工数量（件）");
+  await quantity.fill("");
+  await expect(page.getByRole("button", { name: "确认领取" })).toBeDisabled();
+  await quantity.fill("3");
   await expect(page.locator(".ui-date-input")).toHaveCount(2);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const calendarTrigger = page.getByRole("button", { name: "打开日期选择器" }).first();
@@ -153,6 +157,7 @@ test("claim dates and repeated-claim confirmation preserve the submitted operati
   await confirmation.getByRole("button", { name: "确认", exact: true }).click();
   await expect(page.getByRole("heading", { name: "工序确认" })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("work-report-mock-db-v3")!).assignments.length)).toBe(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("work-report-mock-db-v3")!).assignments.find((item: { id: string }) => item.id !== "ui-old").plannedQuantity)).toBe(3);
 });
 
 test("public modal saves a team, traps focus, returns focus and confirms deletion", async ({ page }, info) => {
@@ -203,6 +208,8 @@ test("report table keeps server filters, edit actions and pagination", async ({ 
   await expect(table.getByRole("columnheader", { name: "工单", exact: true })).toBeVisible();
   await expect(table.getByRole("row")).not.toHaveCount(1);
   await page.getByPlaceholder("工单编号", { exact: true }).fill("UI-NO-MATCH");
+  await expect(table).not.toContainText("没有匹配的报工记录");
+  await page.getByRole("button", { name: "搜索", exact: true }).click();
   await expect(table).toContainText("没有匹配的报工记录");
   await page.getByRole("button", { name: "重置", exact: true }).click();
   await table.getByRole("button", { name: "修改", exact: true }).first().click();
@@ -212,6 +219,20 @@ test("report table keeps server filters, edit actions and pagination", async ({ 
   await expect(page.getByText("修改成功", { exact: true })).toBeVisible();
   await expect(page.locator(".ui-pagination")).toBeVisible();
   await page.screenshot({ path: info.outputPath("reports-loaded.png"), fullPage: true });
+});
+
+test("merged team statistics retain totals and a readable export action", async ({ page }, info) => {
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto("/admin/people");
+  await expect(page.getByRole("heading", { name: "班组工序工时偏差" })).toBeVisible();
+  const table = page.locator(".work-report-table").filter({ has: page.getByRole("columnheader", { name: "偏差值", exact: true }) });
+  await expect(table.getByRole("row").filter({ hasText: "合计" })).toHaveCount(1);
+  const exportButton = page.getByRole("button", { name: "导出CSV", exact: true });
+  expect(await exportButton.evaluate(node => getComputedStyle(node).whiteSpace)).toBe("nowrap");
+  const download = page.waitForEvent("download");
+  await exportButton.click();
+  expect((await download).suggestedFilename()).toContain("班组工序工时偏差");
+  await page.screenshot({ path: info.outputPath("team-stats.png"), fullPage: true, scale: "css" });
 });
 
 test("mobile filters and statistics use keyboard-accessible public controls", async ({ page }, info) => {

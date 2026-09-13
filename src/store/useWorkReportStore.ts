@@ -33,7 +33,7 @@ interface WorkReportState {
   loadRecentClaimableOperations: () => Promise<void>;
   loadClaimableParts: (productId: string) => Promise<void>;
   loadClaimableOperations: (partId: string) => Promise<void>;
-  claimOperation: (operationId: string, input?: { startTime?: string; endTime?: string }) => Promise<OperationAssignment | null>;
+  claimOperation: (operationId: string, input?: { startTime?: string; endTime?: string; quantity?: number }) => Promise<OperationAssignment | null>;
   removeClaimedAssignment: (assignmentId: string) => Promise<void>;
   start: () => Promise<void>;
   pause: (reason?: string) => Promise<void>;

@@ -1,4 +1,4 @@
-import { Button, DateInput, EmptyState, Pagination, RovingTabList, RovingTabPanel, SegmentedControl, TextInput } from "@jc-times/business-ui";
+import { Button, NumericInput, DateInput, EmptyState, Pagination, RovingTabList, RovingTabPanel, SegmentedControl, TextInput } from "@jc-times/business-ui";
 import { useEffect, useState } from "react";
 import { CheckCircle2, RefreshCw, Search, X } from "lucide-react";
 import type { PaginatedResult } from "@/api/services/workReport.repository";
@@ -31,7 +31,7 @@ export function ClaimOperationsPanel({
   onLoadParts: (productId: string) => Promise<void>;
   onLoadOperations: (partId: string) => Promise<void>;
   onClaim: (operationId: string) => void;
-  onConfirmClaim: (startTime: string, endTime: string) => void;
+  onConfirmClaim: (startTime: string, endTime: string, quantity: number) => void;
   onCancelClaim: () => void;
 }) {
   const [keyword, setKeyword] = useState("");
@@ -50,10 +50,13 @@ export function ClaimOperationsPanel({
   const [localStartClock, setLocalStartClock] = useState(initialStart.time);
   const [localEndDate, setLocalEndDate] = useState(initialEnd.date);
   const [localEndClock, setLocalEndClock] = useState(initialEnd.time);
+  const [reportQuantity, setReportQuantity] = useState("");
   const localStartTime = combineDateTimeLocal(localStartDate, localStartClock);
   const localEndTime = combineDateTimeLocal(localEndDate, localEndClock);
   const timeInvalid = Boolean(localStartTime && localEndTime && new Date(localStartTime).getTime() > new Date(localEndTime).getTime());
-  const canConfirmClaim = !loading && !timesLoading && !!localStartTime && !!localEndTime && !timeInvalid;
+  const quantityValue = Number(reportQuantity);
+  const quantityInvalid = !reportQuantity.trim() || !Number.isInteger(quantityValue) || quantityValue < 1;
+  const canConfirmClaim = !loading && !timesLoading && !!localStartTime && !!localEndTime && !timeInvalid && !quantityInvalid;
   const filteredSearchOperations = operations.filter((item) => filter === "all" ? true : item.status === filter);
   const searchPageCount = Math.max(1, Math.ceil(filteredSearchOperations.length / claimSearchPageSize));
   const visibleSearchOperations = filteredSearchOperations.slice((searchPage - 1) * claimSearchPageSize, searchPage * claimSearchPageSize);
@@ -71,6 +74,10 @@ export function ClaimOperationsPanel({
     setLocalEndDate(nextEnd.date);
     setLocalEndClock(nextEnd.time);
   }, [startTime, endTime]);
+
+  useEffect(() => {
+    setReportQuantity(claimed?.plannedQuantity != null ? String(claimed.plannedQuantity) : "");
+  }, [claimed?.id, claimed?.plannedQuantity]);
 
   const search = async () => {
     setSelectedProduct(null);
@@ -114,7 +121,7 @@ export function ClaimOperationsPanel({
   const loadRecent = async () => { await onLoadRecent?.(); };
   const renderOperation = (item: ClaimableOperation) => <article key={item.id} className={item.status !== "available" ? styles.disabled : undefined}><div><strong>{item.operationName}</strong><span className={styles[`claim-status-${item.status}`]}>{item.status === "available" ? "可领取" : item.status === "claimed" ? "已满" : "已关闭"}</span></div><p>{formatProductPartCode(item.productCode, item.partCode)} · 部件号: {item.partNo || "-"} · 工序号: {item.operationNo || "-"}</p><p>{item.operationNote}</p><dl><div><dt>数量</dt><dd>{item.plannedQuantity} 件</dd></div><div><dt>工时</dt><dd>{item.estimatedHours} 小时</dd></div><div><dt>已领</dt><dd>{item.maxClaimWorkers ? `${item.claimedWorkers}/${item.maxClaimWorkers} 人` : `${item.claimedWorkers} 人`}</dd></div></dl><Button variant="primary" className={styles["primary-button"]} disabled={loading || item.status !== "available"} onClick={() => void onClaim(item.id)}>{item.status === "claimed" ? "人数已满" : item.status === "closed" ? "已关闭" : "领取工序"}</Button></article>;
 
-  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><p>部件号: {claimed.partNo || "-"} · 工序号: {claimed.operationNo || "-"}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><span className={styles["field-label"]}>开工时间</span><div className={styles["time-picker-row"]}><label><span>日期</span><DateInput  value={localStartDate} onValueChange={(value) => setLocalStartDate(value)} disabled={timesLoading} inputClassName={styles["time-input"]} /></label><label><span>时间</span><TextInput type="time" step={300} value={localStartClock} onChange={(e) => setLocalStartClock(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label></div></div><div className={styles["time-input-section"]}><span className={styles["field-label"]}>完工时间</span><div className={styles["time-picker-row"]}><label><span>日期</span><DateInput  value={localEndDate} onValueChange={(value) => setLocalEndDate(value)} disabled={timesLoading} inputClassName={styles["time-input"]} /></label><label><span>时间</span><TextInput type="time" step={300} value={localEndClock} onChange={(e) => setLocalEndClock(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label></div></div></div>{timesLoading && <p className={styles["validation-hint"]}>正在读取开完工时间...</p>}{!timesLoading && (!localStartTime || !localEndTime) && <p className={styles["validation-hint"]}>请填写开工时间和完工时间</p>}{timeInvalid && <p className={styles["validation-hint"]}>开工时间不能晚于完工时间</p>}<div className={styles["claim-actions"]}><Button variant="ghost" className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</Button><Button variant="primary" className={styles["primary-button"]} disabled={!canConfirmClaim} onClick={() => { if (canConfirmClaim) onConfirmClaim(localStartTime, localEndTime); }}><CheckCircle2 />确认领取</Button></div></section>;
+  if (claimed) return <section className={styles["claim-success"]}><h2>工序确认</h2><p>{formatProductPartCode(claimed.productCode, claimed.partCode)}</p><p>部件号: {claimed.partNo || "-"} · 工序号: {claimed.operationNo || "-"}</p><strong>{claimed.operationName}</strong><div className={styles["time-input-form"]}><div className={styles["time-input-section"]}><span className={styles["field-label"]}>开工时间</span><div className={styles["time-picker-row"]}><label><span>日期</span><DateInput  value={localStartDate} onValueChange={(value) => setLocalStartDate(value)} disabled={timesLoading} inputClassName={styles["time-input"]} /></label><label><span>时间</span><TextInput type="time" step={300} value={localStartClock} onChange={(e) => setLocalStartClock(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label></div></div><div className={styles["time-input-section"]}><span className={styles["field-label"]}>完工时间</span><div className={styles["time-picker-row"]}><label><span>日期</span><DateInput  value={localEndDate} onValueChange={(value) => setLocalEndDate(value)} disabled={timesLoading} inputClassName={styles["time-input"]} /></label><label><span>时间</span><TextInput type="time" step={300} value={localEndClock} onChange={(e) => setLocalEndClock(e.target.value)} disabled={timesLoading} className={styles["time-input"]} /></label></div></div><div className={styles["time-input-section"]}><NumericInput label="报工数量（件）" min="1" step="1" useGrouping={false} value={reportQuantity} onDraftChange={setReportQuantity} onValueCommit={setReportQuantity} className={styles["time-input"]} /></div></div>{timesLoading && <p className={styles["validation-hint"]}>正在读取开完工时间...</p>}{!timesLoading && (!localStartTime || !localEndTime) && <p className={styles["validation-hint"]}>请填写开工时间和完工时间</p>}{timeInvalid && <p className={styles["validation-hint"]}>开工时间不能晚于完工时间</p>}{!timesLoading && quantityInvalid && <p className={styles["validation-hint"]}>报工数量必须为不小于 1 的整数</p>}<div className={styles["claim-actions"]}><Button variant="ghost" className={styles["ghost-button"]} onClick={onCancelClaim}><X />取消</Button><Button variant="primary" className={styles["primary-button"]} disabled={!canConfirmClaim} onClick={() => { if (canConfirmClaim) onConfirmClaim(localStartTime, localEndTime, quantityValue); }}><CheckCircle2 />确认领取</Button></div></section>;
 
   return <section className={styles["claim-panel"]}>
     <RovingTabList<ClaimPanelView> groupId="claim-view" label="领取工序视图切换" value={view} onChange={setView} options={[{value: "search", label: "搜索领取"}, {value: "recent", label: "查看最近"}]} />

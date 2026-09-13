@@ -30,7 +30,8 @@ export default function ReportsPage() {
   const [editingHours, setEditingHours] = useState("");
   const [message, setMessage] = useState("");
   const [exporting, setExporting] = useState(false);
-  const reportFilters = useMemo(() => ({ ...filters, company: filters.company || undefined }), [filters]);
+  const [appliedFilters, setAppliedFilters] = useState(filters);
+  const reportFilters = useMemo(() => ({ ...appliedFilters, company: appliedFilters.company || undefined }), [appliedFilters]);
   const load = useCallback(async () => {
     const data = await workReportRepository.getReports({ ...reportFilters, page, pageSize });
     setTotal(data.total);
@@ -41,13 +42,19 @@ export default function ReportsPage() {
   const { data: reports = [], loading, error, reload } = useAsyncResource<ReportRecord[]>(load);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
-    setPage(1);
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleResetFilters = () => {
+  const handleSearch = () => {
     setPage(1);
-    setFilters({ keyword: "", orderNo: "", company: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" });
+    setAppliedFilters(filters);
+  };
+
+  const handleResetFilters = () => {
+    const empty: typeof filters = { keyword: "", orderNo: "", company: "", operatorName: "", status: "", operationCode: "", operationName: "", startTime: "", endTime: "" };
+    setPage(1);
+    setFilters(empty);
+    setAppliedFilters(empty);
   };
 
   const handlePageSizeChange = (value: string) => {
@@ -101,7 +108,7 @@ export default function ReportsPage() {
         escapeCsvField(item.operationCode),
         escapeCsvField(item.operationName),
         escapeCsvField(item.operationNote || ""),
-        1,
+        escapeCsvField(item.plannedQuantity),
         escapeCsvField(formatHours(getAllocatedHours(item))),
         escapeCsvField(formatHours(getOriginalEstimatedHours(item))),
         escapeCsvField(item.operatorName),
@@ -177,7 +184,7 @@ export default function ReportsPage() {
           <label>结束日期<DateInput aria-label="结束日期" value={filters.endTime} onValueChange={(value) => handleFilterChange("endTime", value)} /></label>
         </div>
         <div className={cx(styles["filter-actions"])}>
-          <Button variant="primary" className={cx(styles["filter-search-btn"])} onClick={() => void reload()}><Search />搜索</Button>
+          <Button variant="primary" className={cx(styles["filter-search-btn"])} onClick={handleSearch}><Search />搜索</Button>
           <Button variant="ghost" className={cx(styles["filter-reset-btn"])} onClick={handleResetFilters}>重置</Button>
         </div>
       </div>
@@ -188,6 +195,7 @@ export default function ReportsPage() {
 { title: "部件", width: 110 },
 { title: "工序", width: 120 },
 { title: "工艺内容", width: 140 },
+{ title: "数量", width: 70 },
 { title: "分摊工时", width: 100 },
 { title: "原工时", width: 80 },
 { title: "领取人员", width: 80 },
@@ -205,6 +213,7 @@ export default function ReportsPage() {
 <><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></>,
 <div className={cx(styles["operation-note-cell"])} title={(item.operationNote || "").replace(/\n/g, " ")}>{(item.operationNote || "").replace(/\n/g, " ") || "-"}</div>,
+<strong>{item.plannedQuantity}</strong>,
 <><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <Badge className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</Badge>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></>,
 <div className={cx(styles["operator-cell"])}>{item.operatorName}</div>,

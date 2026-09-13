@@ -393,9 +393,9 @@ const initialDb = (scenario: "assigned" | "running" | "paused" = "running"): Moc
     permissionGroup: index === 0 ? "admin" : index < 4 ? "leader" : "worker",
   })),
   reports: [
-    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partNo: "01", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operationNote: "切削前校验毛坯余量，切削后去毛刺并测量各段外圆尺寸。", operatorName: "张师傅", status: "completed", claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, allocatedHours: 4.75, originalEstimatedHours: 8, hourAllocation: { allocationTemporary: true, allocationApplied: true, allocationMethod: "actual_duration_ratio", allocationRatio: 0.59375, allocationBasisSeconds: 24300, allocationParticipantCount: 2 }, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", actualStartAt: "2026-06-22T08:12:00+08:00", actualEndAt: "2026-06-22T15:30:00+08:00", photos: [] },
-    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partNo: "02", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operationNote: "使用M8丝锥，完工后逐件清理铁屑。", operatorName: "王师傅", status: "running", claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, allocatedHours: 4, originalEstimatedHours: 4, hourAllocation: { allocationTemporary: true, allocationApplied: false, allocationMethod: "original_estimated_hours", allocationParticipantCount: 2 }, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T09:05:00+08:00", actualEndAt: undefined, photos: [] },
-    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partNo: "03", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operationNote: "加工前确认夹具定位牢固；首件完成后检查孔距与表面粗糙度，发现毛刺立即停机反馈。", operatorName: "李师傅", status: "paused", claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T08:20:00+08:00", actualEndAt: undefined, photos: [] },
+    { id: "report-001", orderNo: "WO-20260622-011", productName: "传动轴", partNo: "01", partCode: "PART-SHAFT-001", partName: "主轴", operationCode: "OP-010", operationName: "粗加工 · 车削", operationNote: "切削前校验毛坯余量，切削后去毛刺并测量各段外圆尺寸。", operatorName: "张师傅", status: "completed", plannedQuantity: 8, claimedAt: "2026-06-22T08:00:00+08:00", estimatedHours: 8, allocatedHours: 4.75, originalEstimatedHours: 8, hourAllocation: { allocationTemporary: true, allocationApplied: true, allocationMethod: "actual_duration_ratio", allocationRatio: 0.59375, allocationBasisSeconds: 24300, allocationParticipantCount: 2 }, durationHours: 6.75, startedAt: "2026-06-22T08:12:00+08:00", completedAt: "2026-06-22T15:30:00+08:00", actualStartAt: "2026-06-22T08:12:00+08:00", actualEndAt: "2026-06-22T15:30:00+08:00", photos: [] },
+    { id: "report-002", orderNo: "WO-20260623-021", productName: "连接法兰", partNo: "02", partCode: "PART-FLANGE-001", partName: "法兰盘", operationCode: "OP-040", operationName: "钻孔", operationNote: "使用M8丝锥，完工后逐件清理铁屑。", operatorName: "王师傅", status: "running", plannedQuantity: 12, claimedAt: "2026-06-23T08:30:00+08:00", estimatedHours: 4, allocatedHours: 4, originalEstimatedHours: 4, hourAllocation: { allocationTemporary: true, allocationApplied: false, allocationMethod: "original_estimated_hours", allocationParticipantCount: 2 }, durationHours: 3.4, startedAt: "2026-06-23T09:05:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T09:05:00+08:00", actualEndAt: undefined, photos: [] },
+    { id: "report-003", orderNo: "WO-20260623-018", productName: "减速机外壳", partNo: "03", partCode: "PART-CASE-001", partName: "壳体主件", operationCode: "OP-030", operationName: "精加工 · 铣削", operationNote: "加工前确认夹具定位牢固；首件完成后检查孔距与表面粗糙度，发现毛刺立即停机反馈。", operatorName: "李师傅", status: "paused", plannedQuantity: 6, claimedAt: "2026-06-23T08:00:00+08:00", estimatedHours: 7.5, durationHours: 2.1, startedAt: "2026-06-23T08:20:00+08:00", completedAt: undefined, actualStartAt: "2026-06-23T08:20:00+08:00", actualEndAt: undefined, photos: [] },
   ],
   exceptions: [
     { id: "ex-001", type: "overtime", title: "工序用时超过计划", detail: "精加工 · 铣削已超过计划工时 45 分钟", orderNo: "WO-20260623-018", createdAt: "2026-06-23T14:20:00+08:00", status: "open" },
@@ -527,6 +527,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const duplicateAt = duplicate?.claimedAt || duplicate?.plannedStart;
     if (duplicateAt && Date.now() - new Date(duplicateAt).getTime() < mockRepeatClaimCooldownMs) throw new Error("半小时内不能重复领取同一工序");
     const assignment = { ...createAssignmentFromPool(operation, "self_claimed"), actualStartAt: input?.startTime, actualEndAt: input?.endTime };
+    if (input?.quantity !== undefined) assignment.plannedQuantity = input.quantity;
     db.assignments.unshift(assignment);
     db.claimOperations = db.claimOperations.map((item) => {
       if (item.id !== operationId) return item;
@@ -613,6 +614,69 @@ export const mockWorkReportRepository: WorkReportRepository = {
       completedOperations: data.ops,
       attendanceDays: data.dates.size
     })).sort((a, b) => b.totalHours - a.totalHours);
+  },
+  async getTeamOperationStats(company, teamName) {
+    await delay();
+    const db = load();
+    const now = new Date();
+    const teamByWorker = new Map(mockWorkers.map((w) => [w.name, w.teamName ?? "未分配班组"]));
+    const rows = new Map<string, {
+      teamName: string;
+      workerId: string;
+      workerName: string;
+      operationName: string;
+      totalPlannedHours: number;
+      totalActualHours: number;
+      monthPlannedHours: number;
+      monthActualHours: number;
+    }>();
+    for (const r of db.reports) {
+      if (r.status === "cancelled") continue;
+      if (!r.actualEndAt) continue;
+      if (company && mockReportCompany(r) !== company) continue;
+      const workerName = r.operatorName;
+      const operationName = r.operationName || "未命名工序";
+      const key = `${workerName}__${operationName}`;
+      const planned = r.originalEstimatedHours ?? r.estimatedHours ?? 0;
+      const actual = r.allocatedHours ?? r.estimatedHours ?? 0;
+      const inMonth = isSameMonth(new Date(r.actualEndAt), now);
+      let row = rows.get(key);
+      if (!row) {
+        row = {
+          teamName: teamByWorker.get(workerName) ?? "未分配班组",
+          workerId: workerName,
+          workerName,
+          operationName,
+          totalPlannedHours: 0,
+          totalActualHours: 0,
+          monthPlannedHours: 0,
+          monthActualHours: 0
+        };
+        rows.set(key, row);
+      }
+      row.totalPlannedHours += planned;
+      row.totalActualHours += actual;
+      if (inMonth) {
+        row.monthPlannedHours += planned;
+        row.monthActualHours += actual;
+      }
+    }
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return Array.from(rows.values())
+      .filter((row) => !teamName || row.teamName === teamName)
+      .map((row) => ({
+        ...row,
+        totalPlannedHours: round2(row.totalPlannedHours),
+        totalActualHours: round2(row.totalActualHours),
+        monthPlannedHours: round2(row.monthPlannedHours),
+        monthActualHours: round2(row.monthActualHours),
+        deviationHours: round2(row.totalActualHours - row.totalPlannedHours)
+      }))
+      .sort((a, b) =>
+        a.teamName.localeCompare(b.teamName, "zh-Hans-CN") ||
+        a.workerName.localeCompare(b.workerName, "zh-Hans-CN") ||
+        a.operationName.localeCompare(b.operationName, "zh-Hans-CN")
+      );
   },
   async listOperationNames(period, company) {
     await delay();
@@ -899,7 +963,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     const db = load();
     const assignment = findAssignment(db, assignmentId);
     db.assignments = db.assignments.filter((item) => item.id !== assignmentId);
-    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partNo: assignment.partNo || "", partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operationNote: assignment.operationNote || "", operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), actualStartAt: assignment.actualStartAt, actualEndAt: assignment.actualEndAt, photos: [] });
+    db.reports.unshift({ id: `report-remove-${Date.now()}`, orderNo: assignment.orderNo, productName: assignment.productName, partNo: assignment.partNo || "", partCode: assignment.partCode || "", partName: assignment.partName || "", operationCode: assignment.operationCode || "", operationName: `${assignment.operationName}（后台移除：${reason}）`, operationNote: assignment.operationNote || "", operatorName: assignment.collaborators[0] || "张师傅", status: "cancelled", plannedQuantity: assignment.plannedQuantity, claimedAt: nowIso(), estimatedHours: 0, durationHours: 0, startedAt: nowIso(), completedAt: nowIso(), actualStartAt: assignment.actualStartAt, actualEndAt: assignment.actualEndAt, photos: [] });
     save(db);
   },
   async resetDemo(scenario = "running") { await delay(100); save(initialDb(scenario)); },
