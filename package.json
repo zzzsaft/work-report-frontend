@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@handsontable/react-wrapper": "^17.1.0",
-    "@jc-times/business-ui": "0.2.32",
+    "@jc-times/business-ui": "0.2.43",
     "@wecom/jssdk": "^2.2.6",
     "axios": "^1.8.4",
     "handsontable": "^17.1.0",
