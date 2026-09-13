@@ -1,3 +1,5 @@
+import { Alert, Button } from "@jc-times/business-ui";
+import { ReportTable } from "@/components/ui/ReportTable";
 import { useCallback, useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
@@ -38,5 +40,13 @@ export default function PermissionsPage() {
       setSavingId("");
     }
   };
-  return <><AdminHeader title="权限设置" description="罗列所有人员，并为每个人选择权限组" action={<SearchBox value={search} onChange={setSearch} placeholder="搜索姓名、工号、班组或首字母" />} />{message && <div className={cx(styles["admin-message"])}>{message}</div>}<div className={cx(styles["permission-summary-grid"])}>{counts.map((item) => <article key={item.value} className={cx(styles["admin-panel"], styles["permission-summary-card"])}><div className={cx(styles["settings-icon"])}><ShieldCheck /></div><div><strong>{item.count}</strong><span>{item.label}</span></div><p>{item.description}</p></article>)}</div><section className={cx(styles["admin-panel"], styles["permission-panel"])}>{loading ? <LoadingTable /> : error ? <AdminError message={error} retry={() => void reload()} /> : <div className={cx(styles["table-wrap"])}><table><thead><tr><th>人员</th><th>工号</th><th>班组</th><th>当前任务</th><th>权限组</th></tr></thead><tbody>{filtered.map((person) => <tr key={person.id}><td><div className={cx(styles["person-cell"])}><span>{person.name.slice(0,1)}</span><strong>{person.name}</strong></div></td><td>{person.employeeNo}</td><td>{person.teamName}</td><td>{person.activeAssignmentCount} 道</td><td><div className={cx(styles["permission-select-cell"])}>{permissionOptions.map((option) => <button key={option.value} className={person.permissionGroup === option.value ? styles.selected : undefined} disabled={savingId === person.id} onClick={() => void updatePermission(person, option.value)}>{savingId === person.id && person.permissionGroup !== option.value ? <span className="spinner small" /> : option.label}</button>)}</div></td></tr>)}{!filtered.length && <tr><td colSpan={5}>没有匹配的人员。</td></tr>}</tbody></table></div>}</section></>;
+  return <><AdminHeader title="权限设置" description="罗列所有人员，并为每个人选择权限组" action={<SearchBox value={search} onChange={setSearch} placeholder="搜索姓名、工号、班组或首字母" />} />{message && <Alert className={cx(styles["admin-message"])} tone={"info"} description={<>{message}</>} />}<div className={cx(styles["permission-summary-grid"])}>{counts.map((item) => <article key={item.value} className={cx(styles["admin-panel"], styles["permission-summary-card"])}><div className={cx(styles["settings-icon"])}><ShieldCheck /></div><div><strong>{item.count}</strong><span>{item.label}</span></div><p>{item.description}</p></article>)}</div><section className={cx(styles["admin-panel"], styles["permission-panel"])}>{loading ? <LoadingTable /> : error ? <AdminError message={error} retry={() => void reload()} /> : <div className={cx(styles["table-wrap"])}><ReportTable  columns={[{ title: "人员" },
+{ title: "工号" },
+{ title: "班组" },
+{ title: "当前任务" },
+{ title: "权限组" }]} rows={filtered.map((person) => ({ id: String(person.id), cells: [<><div className={cx(styles["person-cell"])}><span>{person.name.slice(0,1)}</span><strong>{person.name}</strong></div></>,
+<>{person.employeeNo}</>,
+<>{person.teamName}</>,
+<>{person.activeAssignmentCount}道</>,
+<><div className={cx(styles["permission-select-cell"])}>{permissionOptions.map((option) => <Button variant="ghost" key={option.value} className={person.permissionGroup === option.value ? styles.selected : undefined} disabled={savingId === person.id} onClick={() => void updatePermission(person, option.value)}>{savingId === person.id && person.permissionGroup !== option.value ? <span className="spinner small" /> : option.label}</Button>)}</div></> ] }))} emptyTitle={"没有匹配的人员。"} /></div>}</section></>;
 }

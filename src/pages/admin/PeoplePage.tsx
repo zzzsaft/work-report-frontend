@@ -1,4 +1,5 @@
-import { Search, ChevronDown, X } from "lucide-react";
+import { Badge, Button, EmptyState, MultiSelect, SegmentedControl, SelectInput } from "@jc-times/business-ui";
+import { ReportTable } from "@/components/ui/ReportTable";
 import { AdminHeader, AdminError, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
 import styles from "./AdminPages.module.less";
@@ -13,11 +14,7 @@ export default function PeoplePage() {
     setCompany,
     selectedNames,
     setSelectedNames,
-    dropdownOpen,
-    setDropdownOpen,
     nameOptions,
-    searchKeyword,
-    setSearchKeyword,
     staff,
     loading,
     error,
@@ -25,10 +22,6 @@ export default function PeoplePage() {
     maxHours,
     totalHours,
     periodLabel,
-    filteredOptions,
-    toggleName,
-    removeName,
-    selectAll
   } = useStaffStats();
 
   return (
@@ -38,94 +31,22 @@ export default function PeoplePage() {
         description={`${periodLabel}员工工时汇总`}
         action={
           <div className={styles["staff-controls"]}>
-            <div className={styles["filter-select"]}>
-              <label>公司</label>
-              <select value={company} onChange={(event) => setCompany(event.target.value as CompanyFilter)}>
+            <div>
+
+              <SelectInput label={<>公司</>} value={company} onChange={(event) => setCompany(event.target.value as CompanyFilter)}>
                 {companyOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
-              </select>
+              </SelectInput>
             </div>
-            <div className={styles["dropdown-filter"]}>
-              <div
-                className={styles["dropdown-display"]}
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-              >
-                <Search className={styles["search-icon"]} />
-                {selectedNames.length === 0 ? (
-                  <span className={styles["dropdown-placeholder"]}>选择工序名称筛选</span>
-                ) : (
-                  <span className={styles["dropdown-count"]}>已选 {selectedNames.length} 个</span>
-                )}
-                <ChevronDown className={styles["dropdown-arrow"]} />
-              </div>
-              {dropdownOpen && (
-                <div className={styles["dropdown-panel"]}>
-                  <div className={styles["dropdown-search"]}>
-                    <Search className={styles["search-icon"]} />
-                    <input
-                      value={searchKeyword}
-                      onChange={(e) => setSearchKeyword(e.target.value)}
-                      placeholder="搜索工序名称"
-                      className={styles["dropdown-search-input"]}
-                    />
-                  </div>
-                  <div className={styles["dropdown-actions"]}>
-                    <button onClick={selectAll} className={styles["dropdown-action-btn"]}>
-                      {selectedNames.length === nameOptions.length && nameOptions.length > 0
-                        ? "取消全选"
-                        : "全选"}
-                    </button>
-                    {selectedNames.length > 0 && (
-                      <button
-                        onClick={() => setSelectedNames([])}
-                        className={styles["dropdown-action-btn"]}
-                      >
-                        清空
-                      </button>
-                    )}
-                  </div>
-                  <div className={styles["dropdown-options"]}>
-                    {filteredOptions.length === 0 ? (
-                      <div className={styles["dropdown-empty"]}>无可选工序</div>
-                    ) : (
-                      filteredOptions.map((name) => (
-                        <label key={name} className={styles["dropdown-option"]}>
-                          <input
-                            type="checkbox"
-                            checked={selectedNames.includes(name)}
-                            onChange={() => toggleName(name)}
-                          />
-                          <span>{name}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
+            <div className={styles["staff-process-filter"]}>
+              <MultiSelect label="工序名称" placeholder="选择工序名称筛选" values={selectedNames}
+                onValuesChange={setSelectedNames} items={nameOptions.map((name) => ({ id: name, label: name }))} />
+              <Button variant="ghost" disabled={!nameOptions.length}
+                onClick={() => setSelectedNames(selectedNames.length === nameOptions.length ? [] : [...nameOptions])}>
+                {nameOptions.length > 0 && selectedNames.length === nameOptions.length ? "取消全选" : "全选"}
+              </Button>
             </div>
-            {selectedNames.length > 0 && (
-              <div className={styles["selected-tags"]}>
-                {selectedNames.map((name) => (
-                  <span key={name} className={styles["selected-tag"]}>
-                    {name}
-                    <X className={styles["tag-close"]} onClick={() => removeName(name)} />
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className={styles["period-tabs"]}>
-              <button
-                className={period === "month" ? styles.periodActive : undefined}
-                onClick={() => setPeriod("month")}
-              >
-                本月
-              </button>
-              <button
-                className={period === "lastMonth" ? styles.periodActive : undefined}
-                onClick={() => setPeriod("lastMonth")}
-              >
-                上月
-              </button>
-            </div>
+            <SegmentedControl<"month" | "lastMonth"> aria-label="统计期间" value={period} onChange={setPeriod}
+              options={[{ value: "month", label: "本月" }, { value: "lastMonth", label: "上月" }]} block={false} variant="soft" />
           </div>
         }
       />
@@ -135,7 +56,7 @@ export default function PeoplePage() {
         <AdminError message={error} retry={() => void reload()} />
       ) : staff.length === 0 ? (
         <section className={cx(styles["admin-panel"])}>
-          <div className={styles["empty-inline"]}>暂无{periodLabel}工时数据</div>
+          <EmptyState className={styles["empty-inline"]} compact title={<>暂无{periodLabel}工时数据</>} />
         </section>
       ) : (
         <>
@@ -155,56 +76,35 @@ export default function PeoplePage() {
           </section>
           <section className={cx(styles["admin-panel"])}>
             <div className={styles["table-wrap"]}>
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 60 }}>排名</th>
-                    <th>生产人员</th>
-                    <th>总工时</th>
-                    <th>工时占比</th>
-                    <th>完成工序</th>
-                    <th>出勤天数</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {staff.map((item, index) => {
+              <ReportTable  columns={[{ title: "排名", width: 60 },
+{ title: "生产人员" },
+{ title: "总工时" },
+{ title: "工时占比" },
+{ title: "完成工序" },
+{ title: "出勤天数" }]} rows={staff.map((item, index) => {
                     const pct = totalHours > 0 ? (item.totalHours / totalHours) * 100 : 0;
                     const barWidth = (item.totalHours / maxHours) * 100;
                     return (
-                      <tr key={item.workerId}>
-                        <td>
-                          <span
+                      ({ id: String(item.workerId), cells: [<><Badge
                             className={cx(styles["rank-badge"], index < 3 && styles[`rank-${index + 1}`])}
                           >
                             {index + 1}
-                          </span>
-                        </td>
-                        <td>
-                          <div className={styles["person-cell"]}>
+                          </Badge></>,
+<><div className={styles["person-cell"]}>
                             <span>{item.workerName.slice(0, 1)}</span>
                             <strong>{item.workerName}</strong>
-                          </div>
-                        </td>
-                        <td>
-                          <strong className={styles["hours-value"]}>{item.totalHours.toFixed(1)}h</strong>
-                        </td>
-                        <td>
-                          <div className={styles["hours-bar-wrap"]}>
+                          </div></>,
+<><strong className={styles["hours-value"]}>{item.totalHours.toFixed(1)}h</strong></>,
+<><div className={styles["hours-bar-wrap"]}>
                             <div className={styles["hours-bar"]} style={{ width: `${barWidth}%` }} />
                             <span className={styles["hours-bar-label"]}>{pct.toFixed(1)}%</span>
-                          </div>
-                        </td>
-                        <td>
-                          {item.completedOperations} 道
-                        </td>
-                        <td>
-                          {item.attendanceDays} 天
-                        </td>
-                      </tr>
+                          </div></>,
+<>{item.completedOperations}道
+                        </>,
+<>{item.attendanceDays}天
+                        </> ] })
                     );
-                  })}
-                </tbody>
-              </table>
+                  })} emptyTitle={"暂无数据"} />
             </div>
           </section>
         </>

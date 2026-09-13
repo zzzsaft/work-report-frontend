@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
             if (!id.includes("node_modules")) return undefined;
             if (id.includes("handsontable") || id.includes("@handsontable")) return "vendor-handsontable";
             if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
-            if (id.includes("react") || id.includes("react-dom") || id.includes("react-router-dom")) return "vendor-react";
+            if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id.replaceAll("\\", "/"))) return "vendor-react";
             return undefined;
           },
         },

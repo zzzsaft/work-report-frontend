@@ -1,5 +1,9 @@
+import { Alert, Button, Checkbox, EmptyState, RovingTabList, RovingTabPanel, SelectInput, TextArea, TextInput, ToggleSwitch } from "@jc-times/business-ui";
+import { ReportDialog } from "@/components/ui/ReportDialog";
+import { useConfirmation } from "@/components/ui/ConfirmationProvider";
+import { ReportTable } from "@/components/ui/ReportTable";
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Users, Settings, Search, X, UserPlus, Link2, Unlink, Shield } from "lucide-react";
+import { Plus, Trash2, Settings, Search, UserPlus, Link2, Unlink, Shield } from "lucide-react";
 import { AdminHeader, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
 import styles from "./AdminPages.module.less";
@@ -13,12 +17,12 @@ import type { SystemConfig } from "@/domain/work-report";
 type Tab = "teams" | "operations";
 
 export default function AssignmentAdminPage() {
+  const confirm = useConfirmation();
   const [activeTab, setActiveTab] = useState<Tab>("teams");
   const {
     teams,
     loading,
     selectedTeamId,
-    setSelectedTeamId,
     selectTeam,
     members,
     membersLoading,
@@ -27,7 +31,6 @@ export default function AssignmentAdminPage() {
     editingTeam,
     setEditingTeam,
     message,
-    setMessage,
     createTeam,
     updateTeam,
     deleteTeam,
@@ -74,20 +77,8 @@ export default function AssignmentAdminPage() {
 
       <div className={cx(styles["tab-container"])}>
         <div className={cx(styles["tab-header"])}>
-          <button
-            className={cx(styles["tab-btn"], activeTab === "teams" && styles["tab-active"])}
-            onClick={() => setActiveTab("teams")}
-          >
-            <Users />
-            班组管理
-          </button>
-          <button
-            className={cx(styles["tab-btn"], activeTab === "operations" && styles["tab-active"])}
-            onClick={() => setActiveTab("operations")}
-          >
-            <Link2 />
-            班组工序映射
-          </button>
+          <RovingTabList<Tab> groupId="team-settings" label="班组管理视图" value={activeTab} onChange={setActiveTab} options={[{value: "teams", label: "班组管理"}, {value: "operations", label: "班组工序映射"}]} />
+
           {canViewAdmin && (
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
               <Shield size={16} style={{ color: systemConfig?.teamOperationPermissionEnabled ? "#4a6cf7" : "#999" }} />
@@ -95,45 +86,16 @@ export default function AssignmentAdminPage() {
               {configLoading ? (
                 <span style={{ fontSize: 13, color: "#999" }}>加载中...</span>
               ) : (
-                <label style={{ position: "relative", display: "inline-block", width: 40, height: 22, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={systemConfig?.teamOperationPermissionEnabled ?? false}
-                    onChange={() => void handleTogglePermission()}
-                    style={{ opacity: 0, width: 0, height: 0 }}
-                  />
-                  <span
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      backgroundColor: systemConfig?.teamOperationPermissionEnabled ? "#4a6cf7" : "#ccc",
-                      borderRadius: 22,
-                      transition: "0.3s"
-                    }}
-                  />
-                  <span
-                    style={{
-                      position: "absolute",
-                      content: "",
-                      height: 16,
-                      width: 16,
-                      left: systemConfig?.teamOperationPermissionEnabled ? 22 : 3,
-                      bottom: 3,
-                      backgroundColor: "#fff",
-                      borderRadius: "50%",
-                      transition: "0.3s"
-                    }}
-                  />
-                </label>
+                <ToggleSwitch aria-label="工序领取权限校验" children={null} checked={systemConfig?.teamOperationPermissionEnabled ?? false} onChange={() => void handleTogglePermission()} />
               )}
             </div>
           )}
         </div>
 
-        {message && <div className={cx(styles["admin-message"])}>{message}</div>}
+        {message && <Alert className={cx(styles["admin-message"])} tone={"info"} description={<>{message}</>} />}
 
         {activeTab === "teams" ? (
-          <TeamManagementTab
+          <RovingTabPanel groupId="team-settings" value="teams"><TeamManagementTab
             teams={teams}
             loading={loading}
             selectedTeamId={selectedTeamId}
@@ -142,21 +104,21 @@ export default function AssignmentAdminPage() {
             membersLoading={membersLoading}
             onAddClick={() => setShowCreateModal(true)}
             onEditClick={(team) => setEditingTeam(team)}
-            onDeleteClick={(team) => {
-              if (confirm(`确定要删除班组"${team.name}"吗？此操作将同时移除班组成员关联和工序映射。`)) {
+            onDeleteClick={async (team) => {
+              if (await confirm(`确定要删除班组"${team.name}"吗？此操作将同时移除班组成员关联和工序映射。`, { danger: true })) {
                 void deleteTeam(team.id);
               }
             }}
             onAddMember={addMember}
             onRemoveMember={removeMember}
-          />
+          /></RovingTabPanel>
         ) : (
-          <TeamOperationsTab
+          <RovingTabPanel groupId="team-settings" value="operations"><TeamOperationsTab
             teams={teams}
             selectedTeamId={selectedTeamId}
             selectedTeam={selectedTeam}
             onSelectTeam={selectTeam}
-          />
+          /></RovingTabPanel>
         )}
       </div>
 
@@ -248,11 +210,11 @@ function TeamManagementTab({
   return (
     <div className={cx(styles["teams-main"])}>
       <div className={cx(styles["teams-toolbar"])}>
-        <button className={cx(styles["btn-primary"])} onClick={onAddClick}>
+        <Button variant="primary" className={cx(styles["btn-primary"])} onClick={onAddClick}>
           <Plus />
           新建班组
-        </button>
-        <select
+        </Button>
+        <SelectInput
           value={selectedTeamId || ""}
           onChange={(e) => void onSelectTeam(e.target.value)}
           className={cx(styles["team-select"])}
@@ -263,15 +225,15 @@ function TeamManagementTab({
               {t.name}
             </option>
           ))}
-        </select>
+        </SelectInput>
         {focusedTeamId && (
           <>
-            <button
+            <Button variant="ghost"
               className={cx(styles["btn-secondary"])}
               onClick={() => setFocusedTeamId(null)}
             >
               退出聚焦
-            </button>
+            </Button>
             <span style={{ fontSize: 13, color: "#4a6cf7" }}>
               聚焦模式：仅显示选中班组，再次点击该行可取消
             </span>
@@ -283,31 +245,16 @@ function TeamManagementTab({
         <LoadingTable />
       ) : (
         <div className={cx(styles["teams-table-wrap"])}>
-          <table>
-            <thead>
-              <tr>
-                <th>班组名称</th>
-                <th>成员数</th>
-                <th>工序数</th>
-                <th style={{ width: 120 }}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedTeams.map((team) => (
-                <tr
-                  key={team.id}
-                  className={cx(selectedTeamId === team.id && styles["team-row-selected"])}
-                  onClick={() => handleRowClick(team.id)}
-                >
-                  <td>
-                    <strong>{team.name}</strong>
-                  </td>
-                  <td>{team.users.length}</td>
-                  <td>{team.operations.length}</td>
-                  <td>
-                    {team.name !== "未分配班组" && (
+          <ReportTable  columns={[{ title: "班组名称" },
+{ title: "成员数" },
+{ title: "工序数" },
+{ title: "操作", width: 120 }]} rows={displayedTeams.map((team) => (
+                ({ id: String(team.id), cells: [<><strong>{team.name}</strong></>,
+<>{team.users.length}</>,
+<>{team.operations.length}</>,
+<>{team.name !== "未分配班组" && (
                       <div className={cx(styles["table-actions-row"])}>
-                        <button
+                        <Button aria-label={"编辑"} variant="ghost"
                           className={cx(styles["table-action"])}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -316,8 +263,8 @@ function TeamManagementTab({
                           title="编辑"
                         >
                           <Settings />
-                        </button>
-                        <button
+                        </Button>
+                        <Button aria-label={"删除"} variant="danger"
                           className={cx(styles["table-action"], styles["danger-text"])}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -326,21 +273,10 @@ function TeamManagementTab({
                           title="删除"
                         >
                           <Trash2 />
-                        </button>
+                        </Button>
                       </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {!teams.length && !focusedTeamId && (
-                <tr>
-                  <td colSpan={4} className={cx(styles["empty-inline"])}>
-                    暂无班组
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    )}</> ], className: cx(selectedTeamId === team.id && styles["team-row-selected"]), onClick: () => handleRowClick(team.id) })
+              ))} emptyTitle={"暂无班组"} />
         </div>
       )}
 
@@ -351,84 +287,47 @@ function TeamManagementTab({
               <h2>{currentTeam.name}</h2>
               {currentTeam.description && <p>{currentTeam.description}</p>}
             </div>
-            <button
+            <Button variant="primary"
               className={cx(styles["btn-primary"])}
               onClick={() => setShowMemberPicker(true)}
               disabled={isUnassigned}
             >
               <UserPlus />
               添加成员
-            </button>
+            </Button>
           </div>
 
           {membersLoading ? (
             <LoadingTable />
           ) : (
             <div className={cx(styles["table-wrap"])}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>工号</th>
-                    <th>姓名</th>
-                    <th>姓名首字母</th>
-                    <th>班组</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((member) => (
-                    <tr key={member.id}>
-                      <td>{member.employeeNo || "—"}</td>
-                      <td>
-                        <strong>{member.name}</strong>
-                      </td>
-                      <td>{member.nameInitials || "—"}</td>
-                      <td>{member.teamName || "—"}</td>
-                      <td>
-                        {!isUnassigned && (
-                          <button
+              <ReportTable  columns={[{ title: "工号" },
+{ title: "姓名" },
+{ title: "姓名首字母" },
+{ title: "班组" },
+{ title: "操作" }]} rows={members.map((member) => (
+                    ({ id: String(member.id), cells: [<>{member.employeeNo || "—"}</>,
+<><strong>{member.name}</strong></>,
+<>{member.nameInitials || "—"}</>,
+<>{member.teamName || "—"}</>,
+<>{!isUnassigned && (
+                          <Button variant="danger"
                             className={cx(styles["table-action"], styles["danger-action"])}
                             onClick={() => void onRemoveMember(currentTeam.id, member.id)}
                           >
                             <Unlink />
                             移除
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {!members.length && (
-                    <tr>
-                      <td colSpan={5} className={cx(styles["empty-inline"])}>
-                        暂无成员
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                          </Button>
+                        )}</> ] })
+                  ))} emptyTitle={"暂无成员"} />
             </div>
           )}
         </div>
       )}
 
       {showMemberPicker && currentTeam && (
-        <div
-          className={cx(styles["modal-overlay"])}
-          onClick={() => setShowMemberPicker(false)}
-        >
-          <div
-            className={cx(styles["modal-content"], styles["modal-md"])}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={cx(styles["modal-header"])}>
-              <h3>添加成员到 {currentTeam.name}</h3>
-              <button className={cx(styles["modal-close"])} onClick={() => setShowMemberPicker(false)}>
-                <X />
-              </button>
-            </div>
-            <div className={cx(styles["modal-body"])}>
-              <div className={cx(styles["member-picker-search"])}>
-                <input
+        <ReportDialog title={<>添加成员到 {currentTeam.name}</>} onClose={() => setShowMemberPicker(false)}  ><div className={cx(styles["member-picker-search"])}>
+                <TextInput aria-label="搜索姓名/工号"
                   value={memberKeyword}
                   onChange={(e) => setMemberKeyword(e.target.value)}
                   placeholder="搜索姓名/工号"
@@ -436,12 +335,11 @@ function TeamManagementTab({
                     if (e.key === "Enter") void searchMembers();
                   }}
                 />
-                <button className={cx(styles["btn-primary"])} onClick={() => void searchMembers()}>
+                <Button aria-label={"搜索"} variant="primary" className={cx(styles["btn-primary"])} onClick={() => void searchMembers()}>
                   <Search />
-                </button>
-              </div>
-              {searching ? (
-                <div className={cx(styles["empty-inline"])}>搜索中...</div>
+                </Button>
+              </div>{searching ? (
+                <EmptyState className={cx(styles["empty-inline"])} compact title={<>搜索中...</>} />
               ) : (
                 <div className={cx(styles["member-picker-list"])}>
                   {searchResults.map((worker) => (
@@ -453,7 +351,7 @@ function TeamManagementTab({
                           {worker.employeeNo} · {worker.teamName || "无班组"}
                         </small>
                       </div>
-                      <button
+                      <Button variant="primary"
                         className={cx(styles["btn-primary"])}
                         onClick={async () => {
                           try {
@@ -467,17 +365,14 @@ function TeamManagementTab({
                         }}
                       >
                         添加
-                      </button>
+                      </Button>
                     </div>
                   ))}
                   {!searchResults.length && !searching && (
-                    <div className={cx(styles["empty-inline"])}>输入关键词搜索人员</div>
+                    <EmptyState className={cx(styles["empty-inline"])} compact title={<>输入关键词搜索人员</>} />
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
+              )}</ReportDialog>
       )}
     </div>
   );
@@ -501,7 +396,7 @@ function TeamOperationsTab({
     selectedIds,
     setSelectedIds,
     message,
-    setMessage: setOpMessage,
+
     newOpCode,
     setNewOpCode,
     createOperation,
@@ -514,7 +409,7 @@ function TeamOperationsTab({
   return (
     <div className={cx(styles["operations-layout"])}>
       <div className={cx(styles["operations-toolbar"])}>
-        <select
+        <SelectInput
           value={selectedTeamId || ""}
           onChange={(e) => void onSelectTeam(e.target.value)}
           className={cx(styles["team-select"])}
@@ -525,10 +420,10 @@ function TeamOperationsTab({
               {t.name}
             </option>
           ))}
-        </select>
+        </SelectInput>
         {selectedTeam && !isUnassigned && (
           <>
-            <input
+            <TextInput aria-label="输入工序编码"
               value={newOpCode}
               onChange={(e) => setNewOpCode(e.target.value)}
               placeholder="输入工序编码"
@@ -537,26 +432,26 @@ function TeamOperationsTab({
                 if (e.key === "Enter") void createOperation();
               }}
             />
-            <button className={cx(styles["btn-primary"])} onClick={() => void createOperation()}>
+            <Button variant="primary" className={cx(styles["btn-primary"])} onClick={() => void createOperation()}>
               <Plus />
               添加工序
-            </button>
-            <button className={cx(styles["btn-secondary"])} onClick={() => void syncOperations()}>
+            </Button>
+            <Button variant="ghost" className={cx(styles["btn-secondary"])} onClick={() => void syncOperations()}>
               同步历史数据
-            </button>
+            </Button>
             {selectedIds.length > 0 && (
-              <button
+              <Button variant="danger"
                 className={cx(styles["danger-action"])}
                 onClick={() => void batchDelete()}
               >
                 批量删除 ({selectedIds.length})
-              </button>
+              </Button>
             )}
           </>
         )}
       </div>
 
-      {message && <div className={cx(styles["admin-message"])}>{message}</div>}
+      {message && <Alert className={cx(styles["admin-message"])} tone={"info"} description={<>{message}</>} />}
 
       {!selectedTeam ? (
         <div className={cx(styles["empty-state"])}>
@@ -572,59 +467,33 @@ function TeamOperationsTab({
         <LoadingTable />
       ) : (
         <div className={cx(styles["table-wrap"])}>
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 40 }}>
-                  <input
-                    type="checkbox"
+          <ReportTable  columns={[{ title: <><Checkbox aria-label="选择记录"
+                    label={null}
                     checked={operations.length > 0 && selectedIds.length === operations.length}
                     onChange={(e) =>
                       setSelectedIds(e.target.checked ? operations.map((o) => o.id) : [])
                     }
-                  />
-                </th>
-                <th>工序编码</th>
-                <th>工序名称</th>
-                <th>创建时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {operations.map((op) => (
-                <tr key={op.id}>
-                  <td>
-                    <input
-                      type="checkbox"
+                  /></>, width: 40 },
+{ title: "工序编码" },
+{ title: "工序名称" },
+{ title: "创建时间" },
+{ title: "操作" }]} rows={operations.map((op) => (
+                ({ id: String(op.id), cells: [<><Checkbox aria-label="选择记录"
+                      label={null}
                       checked={selectedIds.includes(op.id)}
                       onChange={() => toggleSelect(op.id)}
-                    />
-                  </td>
-                  <td>
-                    <strong>{op.operationCode}</strong>
-                  </td>
-                  <td>{op.operationName || "—"}</td>
-                  <td>{new Date(op.createdAt).toLocaleString("zh-CN")}</td>
-                  <td>
-                    <button
+                    /></>,
+<><strong>{op.operationCode}</strong></>,
+<>{op.operationName || "—"}</>,
+<>{new Date(op.createdAt).toLocaleString("zh-CN")}</>,
+<><Button variant="danger"
                       className={cx(styles["table-action"], styles["danger-action"])}
                       onClick={() => void deleteOperation(op.id)}
                     >
                       <Trash2 />
                       删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!operations.length && (
-                <tr>
-                  <td colSpan={5} className={cx(styles["empty-inline"])}>
-                    该班组暂无关联工序
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </Button></> ] })
+              ))} emptyTitle={"该班组暂无关联工序"} />
         </div>
       )}
     </div>
@@ -663,46 +532,26 @@ function TeamFormModal({
   };
 
   return (
-    <div className={cx(styles["modal-overlay"])} onClick={onClose}>
-      <div className={cx(styles["modal-content"], styles["modal-sm"])} onClick={(e) => e.stopPropagation()}>
-        <div className={cx(styles["modal-header"])}>
-          <h3>{team ? "编辑班组" : "新建班组"}</h3>
-          <button className={cx(styles["modal-close"])} onClick={onClose}>
-            <X />
-          </button>
-        </div>
-        <div className={cx(styles["modal-body"])}>
-          <div className={cx(styles["modal-field"])}>
-            <label>
-              班组名称 <span className={cx(styles["required-mark"])}>*</span>
-            </label>
-            <input
+    <ReportDialog title={<>{team ? "编辑班组" : "新建班组"}</>} onClose={onClose} busy={submitting} footer={<><Button variant="ghost" className={cx(styles["table-action"])} onClick={onClose} disabled={submitting}>
+            取消
+          </Button><Button variant="primary" className={cx(styles["btn-primary"])} onClick={() => void handleSubmit()} disabled={submitting}>
+            {submitting ? "保存中..." : "保存"}
+          </Button></>}><div className={cx(styles["modal-field"])}>
+
+            <TextInput label={<>班组名称 <span className={cx(styles["required-mark"])}>*</span></>}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="输入班组名称"
               autoFocus
             />
-          </div>
-          <div className={cx(styles["modal-field"])}>
-            <label>描述</label>
-            <textarea
+          </div><div className={cx(styles["modal-field"])}>
+
+            <TextArea label={<>描述</>}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="可选，班组描述信息"
               rows={3}
             />
-          </div>
-          {error && <div className={cx(styles["admin-message"])}>{error}</div>}
-        </div>
-        <div className={cx(styles["modal-footer"])}>
-          <button className={cx(styles["table-action"])} onClick={onClose} disabled={submitting}>
-            取消
-          </button>
-          <button className={cx(styles["btn-primary"])} onClick={() => void handleSubmit()} disabled={submitting}>
-            {submitting ? "保存中..." : "保存"}
-          </button>
-        </div>
-      </div>
-    </div>
+          </div>{error && <Alert className={cx(styles["admin-message"])} tone={"info"} description={<>{error}</>} />}</ReportDialog>
   );
 }

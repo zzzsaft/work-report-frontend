@@ -1,3 +1,4 @@
+import { Button } from "@jc-times/business-ui";
 import { useEffect, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { canAccessAdminRoute, type AdminRouteKey } from "@/domain/work-report";
@@ -49,7 +50,7 @@ export function CapabilityGuard({ children }: { children: ReactNode }) {
           <div className={styles.emptyState}>
             <h1>无权访问管理后台</h1>
             <p>{error}</p>
-            <button className={styles.primaryButton} onClick={() => void loadCapabilities({ force: true })}>重试</button>
+            <Button variant="primary" className={styles.primaryButton} onClick={() => void loadCapabilities({ force: true })}>重试</Button>
           </div>
         );
       }

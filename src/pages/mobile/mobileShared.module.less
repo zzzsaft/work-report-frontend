@@ -54,13 +54,13 @@
   color: var(--ink);
   background: #fff; font-size: 17px; }
 
-.field-label select,.field-label input { min-height: 52px; }
+.field-label select,.field-label input { --ui-min-target-height: 52px; min-height: 52px; }
 
 .field-label textarea { resize: vertical; }
 
 .sheet-actions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; margin-top: 20px; }
 
-.primary-button,.ghost-button { display: flex; min-height: 54px; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; padding: 10px 18px; font-size: 17px; font-weight: 800; }
+.primary-button,.ghost-button { --ui-min-target-height: 54px; display: flex; min-height: 54px; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; padding: 10px 18px; font-size: 17px; font-weight: 800; }
 
 .primary-button { border: 0;
   color: #fff;

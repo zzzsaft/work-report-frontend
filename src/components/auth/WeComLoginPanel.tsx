@@ -1,3 +1,4 @@
+import { Button } from "@jc-times/business-ui";
 import { useEffect, useRef, useState } from "react";
 import styles from "./AuthShared.module.less";
 import {
@@ -78,9 +79,9 @@ export function WeComLoginPanel({
         {!isAutoLogin && <div className={styles["wecom-panel"]} ref={panelElement} />}
         {error && <div className={styles["wecom-panel-error"]}>{error}</div>}
         {onBack && (
-          <button className={styles["login-secondary-button"]} type="button" onClick={onBack}>
+          <Button variant="ghost" className={styles["login-secondary-button"]} type="button" onClick={onBack}>
             返回账号密码登录
-          </button>
+          </Button>
         )}
       </section>
     </main>

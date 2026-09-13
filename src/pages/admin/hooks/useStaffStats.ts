@@ -7,9 +7,7 @@ export function useStaffStats() {
   const [period, setPeriod] = useState<Period>("month");
   const [company, setCompany] = useState<CompanyFilter>("");
   const [selectedNames, setSelectedNames] = useState<string[]>([]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [nameOptions, setNameOptions] = useState<string[]>([]);
-  const [searchKeyword, setSearchKeyword] = useState("");
 
   useEffect(() => {
     workReportRepository
@@ -29,26 +27,6 @@ export function useStaffStats() {
   const totalHours = staff.reduce((sum, s) => sum + s.totalHours, 0);
   const periodLabel = period === "lastMonth" ? "上月" : "本月";
 
-  const filteredOptions = searchKeyword
-    ? nameOptions.filter((n) => n.toLowerCase().includes(searchKeyword.toLowerCase()))
-    : nameOptions;
-
-  const toggleName = (name: string) => {
-    setSelectedNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
-  };
-
-  const removeName = (name: string) => {
-    setSelectedNames((prev) => prev.filter((n) => n !== name));
-  };
-
-  const selectAll = () => {
-    if (selectedNames.length === nameOptions.length) {
-      setSelectedNames([]);
-    } else {
-      setSelectedNames([...nameOptions]);
-    }
-  };
-
   return {
     period,
     setPeriod,
@@ -56,11 +34,7 @@ export function useStaffStats() {
     setCompany,
     selectedNames,
     setSelectedNames,
-    dropdownOpen,
-    setDropdownOpen,
     nameOptions,
-    searchKeyword,
-    setSearchKeyword,
     staff,
     loading,
     error,
@@ -68,9 +42,5 @@ export function useStaffStats() {
     maxHours,
     totalHours,
     periodLabel,
-    filteredOptions,
-    toggleName,
-    removeName,
-    selectAll
   };
 }

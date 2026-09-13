@@ -1,3 +1,4 @@
+import { Button } from "@jc-times/business-ui";
 import { useCallback } from "react";
 import { AlertTriangle } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
@@ -19,5 +20,5 @@ export default function ExceptionsPage() {
   };
   if (loading) return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><LoadingTable /></>;
   if (error) return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><AdminError message={error} retry={() => void reload()} /></>;
-  return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><div className={cx(styles["exception-list"])}>{items.map((item) => <article key={item.id} className={styles[item.status]}><div className={cx(styles["exception-icon"])}><AlertTriangle /></div><div><div><h2>{item.title}</h2><span>{item.status === "open" ? "待处理" : "已处理"}</span></div><p>{item.detail}</p><small>{item.orderNo} · {new Date(item.createdAt).toLocaleString("zh-CN")}</small></div>{canReviewExceptions && item.status === "open" && <button onClick={() => void resolve(item.id)}>标记为已处理</button>}</article>)}</div></>;
+  return <><AdminHeader title="异常审核" description="集中处理超时、重复报工和信息缺失" /><div className={cx(styles["exception-list"])}>{items.map((item) => <article key={item.id} className={styles[item.status]}><div className={cx(styles["exception-icon"])}><AlertTriangle /></div><div><div><h2>{item.title}</h2><span>{item.status === "open" ? "待处理" : "已处理"}</span></div><p>{item.detail}</p><small>{item.orderNo} · {new Date(item.createdAt).toLocaleString("zh-CN")}</small></div>{canReviewExceptions && item.status === "open" && <Button variant="ghost" onClick={() => void resolve(item.id)}>标记为已处理</Button>}</article>)}</div></>;
 }

@@ -1,3 +1,6 @@
+import { Alert, Button, Checkbox, NumericInput, SelectInput, TextInput } from "@jc-times/business-ui";
+import { useConfirmation } from "@/components/ui/ConfirmationProvider";
+import { ReportTable } from "@/components/ui/ReportTable";
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Copy, ExternalLink, QrCode, RefreshCw } from "lucide-react";
 import { AuthService, type WeComDepartment, type WeComUser } from "@/api/services/auth.service";
@@ -50,6 +53,7 @@ const defaultWeComDepartmentForm: WeComDepartmentForm = {
 };
 
 export default function WeComPage() {
+  const confirm = useConfirmation();
   const [tab, setTab] = useState<"users" | "departments">("users");
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
@@ -202,7 +206,7 @@ export default function WeComPage() {
   };
 
   const deleteUser = async (userid: string) => {
-    if (!window.confirm(`确认删除企业微信用户 ${userid} 吗？`)) return;
+    if (!await confirm(`确认删除企业微信用户 ${userid} 吗？`, { danger: true })) return;
     setDeletingUserId(userid);
     setMessage("");
     try {
@@ -268,7 +272,7 @@ export default function WeComPage() {
   };
 
   const deleteDepartment = async (id: number) => {
-    if (!window.confirm(`确认删除部门 ${id} 吗？`)) return;
+    if (!await confirm(`确认删除部门 ${id} 吗？`, { danger: true })) return;
     setSaving(true);
     setMessage("");
     try {
@@ -315,10 +319,10 @@ export default function WeComPage() {
       <AdminHeader title="企业微信管理" description="HR 可在此分享入职二维码、管理员工账号与部门" />
       <section className={styles["wecom-tabs"]}>
         <div className={styles["wecom-tab-buttons"]}>
-          <button className={tab === "users" ? styles.active : undefined} onClick={() => setTab("users")}>员工管理</button>
-          <button className={tab === "departments" ? styles.active : undefined} onClick={() => setTab("departments")}>部门管理</button>
+          <Button variant="ghost" className={tab === "users" ? styles.active : undefined} onClick={() => setTab("users")}>员工管理</Button>
+          <Button variant="ghost" className={tab === "departments" ? styles.active : undefined} onClick={() => setTab("departments")}>部门管理</Button>
         </div>
-        {message && <div className={cx(styles["admin-message"])}>{message}</div>}
+        {message && <Alert className={cx(styles["admin-message"])} tone={"info"} description={<>{message}</>} />}
         {tab === "users" ? (
           <WeComUsersSection
             filteredUsers={filteredUsers}
@@ -425,10 +429,10 @@ function WeComUsersSection({
             <h2>邀请二维码</h2>
             <p>分享给新员工，填写企业微信入职申请。</p>
           </div>
-          <button className={styles["admin-primary-action"]} type="button" onClick={toggleJoinQr} aria-expanded={joinQrExpanded}>
+          <Button variant="primary" className={styles["admin-primary-action"]} type="button" onClick={toggleJoinQr} aria-expanded={joinQrExpanded}>
             <QrCode />
             {joinQrExpanded ? "收起二维码" : "显示二维码"}
-          </button>
+          </Button>
         </div>
         {joinQrExpanded && (
           <div className={styles["wecom-qr-preview"]}>
@@ -442,24 +446,21 @@ function WeComUsersSection({
                     <ExternalLink />
                     打开
                   </a>
-                  <button className={styles["table-action"]} type="button" onClick={() => navigator.clipboard.writeText(joinQrCode)}>
+                  <Button variant="ghost" className={styles["table-action"]} type="button" onClick={() => navigator.clipboard.writeText(joinQrCode)}>
                     <Copy />
                     复制链接
-                  </button>
-                  <button className={styles["table-action"]} type="button" disabled={joinQrLoading} onClick={() => void refreshJoinQrCode()}>
+                  </Button>
+                  <Button variant="ghost" className={styles["table-action"]} type="button" disabled={joinQrLoading} onClick={() => void refreshJoinQrCode()}>
                     <RefreshCw />
                     刷新
-                  </button>
+                  </Button>
                 </div>
               </>
             ) : joinQrError ? (
-              <div className={styles["admin-message"]}>
-                <span>{joinQrError}</span>
-                <button className={styles["table-action"]} type="button" onClick={() => void refreshJoinQrCode()}>
+              <Alert className={styles["admin-message"]} tone={"info"} description={<><span>{joinQrError}</span><Button variant="ghost" className={styles["table-action"]} type="button" onClick={() => void refreshJoinQrCode()}>
                   <RefreshCw />
                   刷新
-                </button>
-              </div>
+                </Button></>} />
             ) : null}
           </div>
         )}
@@ -471,21 +472,21 @@ function WeComUsersSection({
             <p>搜索、创建、修改或删除企业微信员工。</p>
           </div>
           <div className={styles["panel-actions"]}>
-            <button className={styles["admin-primary-action"]} disabled={syncingUserDepartments} onClick={syncUserDepartments}>
+            <Button variant="primary" className={styles["admin-primary-action"]} disabled={syncingUserDepartments} onClick={syncUserDepartments}>
               {syncingUserDepartments ? "同步中..." : "同步员工部门关系"}
-            </button>
-            <button className={styles["admin-primary-action"]} onClick={resetUserForm}>
+            </Button>
+            <Button variant="primary" className={styles["admin-primary-action"]} onClick={resetUserForm}>
               新建员工
-            </button>
+            </Button>
           </div>
         </div>
         <div className={styles["wecom-user-layout"]}>
           <div className={styles["wecom-user-list"]}>
             <div className={styles["panel-actions"]}>
               <SearchBox value={search} onChange={setSearch} placeholder="搜索员工账号、姓名或手机号" />
-              <button className={styles["admin-primary-action"]} onClick={() => void reloadUsers()}>
+              <Button variant="primary" className={styles["admin-primary-action"]} onClick={() => void reloadUsers()}>
                 刷新列表
-              </button>
+              </Button>
             </div>
             {usersLoading ? (
               <LoadingTable />
@@ -493,40 +494,21 @@ function WeComUsersSection({
               <WeComListState message={usersError} retry={() => void reloadUsers()} />
             ) : (
               <div className={styles["table-wrap"]}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>账号</th>
-                      <th>姓名</th>
-                      <th>手机号</th>
-                      <th>部门</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.userid}>
-                        <td>{user.userid}</td>
-                        <td>{user.name}</td>
-                        <td>{user.mobile || "-"}</td>
-                        <td>{Array.isArray(user.department) ? user.department.join(",") : "-"}</td>
-                        <td>
-                          <button className={styles["table-action"]} onClick={() => selectUser(user)}>
+                <ReportTable  columns={[{ title: "账号" },
+{ title: "姓名" },
+{ title: "手机号" },
+{ title: "部门" },
+{ title: "操作" }]} rows={filteredUsers.map((user) => (
+                      ({ id: String(user.userid), cells: [<>{user.userid}</>,
+<>{user.name}</>,
+<>{user.mobile || "-"}</>,
+<>{Array.isArray(user.department) ? user.department.join(",") : "-"}</>,
+<><Button variant="ghost" className={styles["table-action"]} onClick={() => selectUser(user)}>
                             编辑
-                          </button>
-                          <button className={styles["table-action"]} disabled={deletingUserId === user.userid} onClick={() => void deleteUser(user.userid)}>
+                          </Button><Button variant="ghost" className={styles["table-action"]} disabled={deletingUserId === user.userid} onClick={() => void deleteUser(user.userid)}>
                             删除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {!filteredUsers.length && (
-                      <tr>
-                        <td colSpan={5}>没有匹配的员工。</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          </Button></> ] })
+                    ))} emptyTitle={"没有匹配的员工。"} />
               </div>
             )}
           </div>
@@ -563,23 +545,23 @@ function WeComUserFormCard({
     <div className={styles["wecom-user-form"]}>
       <h3>{selectedUser ? "编辑员工" : "创建员工"}</h3>
       <div className={styles["form-grid"]}>
-        <label className={styles["admin-field"]}>员工账号<input value={userForm.userid} disabled={Boolean(selectedUser)} onChange={(event) => updateUserForm("userid", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>姓名<input value={userForm.name} onChange={(event) => updateUserForm("name", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>手机号<input value={userForm.mobile} onChange={(event) => updateUserForm("mobile", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>别名<input value={userForm.alias} onChange={(event) => updateUserForm("alias", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>职位<input value={userForm.position} onChange={(event) => updateUserForm("position", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>邮箱<input value={userForm.email} onChange={(event) => updateUserForm("email", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>电话<input value={userForm.telephone} onChange={(event) => updateUserForm("telephone", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>部门<input value={userForm.departmentInput} placeholder="例如 1,2" onChange={(event) => updateUserForm("departmentInput", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>部门排序<input value={userForm.orderInput} placeholder="例如 10,20" onChange={(event) => updateUserForm("orderInput", event.target.value)} /></label>
-        <label className={styles["admin-field"]}>性别<select value={userForm.gender} onChange={(event) => updateUserForm("gender", event.target.value)}><option value="1">男</option><option value="2">女</option><option value="0">未知</option></select></label>
-        <label className={styles["admin-field"]}><span>启用</span><input type="checkbox" checked={userForm.enable} onChange={(event) => updateUserForm("enable", event.target.checked)} /></label>
+        <label className={styles["admin-field"]}>员工账号<TextInput value={userForm.userid} disabled={Boolean(selectedUser)} onChange={(event) => updateUserForm("userid", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>姓名<TextInput value={userForm.name} onChange={(event) => updateUserForm("name", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>手机号<TextInput value={userForm.mobile} onChange={(event) => updateUserForm("mobile", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>别名<TextInput value={userForm.alias} onChange={(event) => updateUserForm("alias", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>职位<TextInput value={userForm.position} onChange={(event) => updateUserForm("position", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>邮箱<TextInput value={userForm.email} onChange={(event) => updateUserForm("email", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>电话<TextInput value={userForm.telephone} onChange={(event) => updateUserForm("telephone", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>部门<TextInput value={userForm.departmentInput} placeholder="例如 1,2" onChange={(event) => updateUserForm("departmentInput", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>部门排序<TextInput value={userForm.orderInput} placeholder="例如 10,20" onChange={(event) => updateUserForm("orderInput", event.target.value)} /></label>
+        <label className={styles["admin-field"]}>性别<SelectInput value={userForm.gender} onChange={(event) => updateUserForm("gender", event.target.value)}><option value="1">男</option><option value="2">女</option><option value="0">未知</option></SelectInput></label>
+        <div className={styles["admin-field"]}><Checkbox label={<><span>启用</span></>} checked={userForm.enable} onChange={(event) => updateUserForm("enable", event.target.checked)} /></div>
       </div>
       <div className={styles["form-actions"]}>
-        <button className={cx(styles["admin-primary-action"], styles["full-width"])} disabled={saving} onClick={() => void saveUser()}>
+        <Button variant="primary" className={cx(styles["admin-primary-action"], styles["full-width"])} disabled={saving} onClick={() => void saveUser()}>
           {selectedUser ? "保存修改" : "创建员工"}
-        </button>
-        {selectedUser && <button className={styles["table-action"]} disabled={saving} onClick={resetUserForm}>取消编辑</button>}
+        </Button>
+        {selectedUser && <Button variant="ghost" className={styles["table-action"]} disabled={saving} onClick={resetUserForm}>取消编辑</Button>}
       </div>
     </div>
   );
@@ -625,17 +607,17 @@ function WeComDepartmentsSection({
             <p>把企业微信部门结构同步到本地，并创建或修改部门信息。</p>
           </div>
           <div className={styles["panel-actions"]}>
-            <button className={styles["admin-primary-action"]} disabled={syncingDepartments} onClick={syncDepartments}>
+            <Button variant="primary" className={styles["admin-primary-action"]} disabled={syncingDepartments} onClick={syncDepartments}>
               {syncingDepartments ? "同步中..." : "同步部门"}
-            </button>
+            </Button>
           </div>
         </div>
         <div className={styles["wecom-department-layout"]}>
           <div className={styles["wecom-department-list"]}>
             <div className={styles["panel-actions"]}>
-              <button className={styles["admin-primary-action"]} onClick={() => void reloadDepartments()}>
+              <Button variant="primary" className={styles["admin-primary-action"]} onClick={() => void reloadDepartments()}>
                 刷新列表
-              </button>
+              </Button>
             </div>
             {departmentsLoading ? (
               <LoadingTable />
@@ -643,56 +625,37 @@ function WeComDepartmentsSection({
               <WeComListState message={departmentsError} retry={() => void reloadDepartments()} />
             ) : (
               <div className={styles["table-wrap"]}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>父部门</th>
-                      <th>排序</th>
-                      <th>名称</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {departments.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.id}</td>
-                        <td>{item.parentid ?? "-"}</td>
-                        <td>{item.order ?? "-"}</td>
-                        <td>{item.name || "-"}</td>
-                        <td>
-                          <button className={styles["table-action"]} onClick={() => startEditDepartment(item)}>
+                <ReportTable  columns={[{ title: "ID" },
+{ title: "父部门" },
+{ title: "排序" },
+{ title: "名称" },
+{ title: "操作" }]} rows={departments.map((item) => (
+                      ({ id: String(item.id), cells: [<>{item.id}</>,
+<>{item.parentid ?? "-"}</>,
+<>{item.order ?? "-"}</>,
+<>{item.name || "-"}</>,
+<><Button variant="ghost" className={styles["table-action"]} onClick={() => startEditDepartment(item)}>
                             编辑
-                          </button>
-                          <button className={styles["table-action"]} onClick={() => void deleteDepartment(item.id)}>
+                          </Button><Button variant="ghost" className={styles["table-action"]} onClick={() => void deleteDepartment(item.id)}>
                             删除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {!departments.length && (
-                      <tr>
-                        <td colSpan={5}>没有可用部门数据。</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          </Button></> ] })
+                    ))} emptyTitle={"没有可用部门数据。"} />
               </div>
             )}
           </div>
           <div className={styles["wecom-department-form"]}>
             <h3>{editingDepartmentId ? "编辑部门" : "新增部门"}</h3>
             <div className={styles["form-grid"]}>
-              <label className={styles["admin-field"]}>名称<input value={departmentForm.name} onChange={(event) => setDepartmentForm((current) => ({ ...current, name: event.target.value }))} /></label>
-              <label className={styles["admin-field"]}>父部门<input type="number" value={departmentForm.parentid} onChange={(event) => setDepartmentForm((current) => ({ ...current, parentid: Number(event.target.value) }))} /></label>
-              <label className={styles["admin-field"]}>排序<input type="number" value={departmentForm.order} onChange={(event) => setDepartmentForm((current) => ({ ...current, order: Number(event.target.value) }))} /></label>
-              <label className={styles["admin-field"]}>英文名<input value={departmentForm.name_en} onChange={(event) => setDepartmentForm((current) => ({ ...current, name_en: event.target.value }))} /></label>
+              <label className={styles["admin-field"]}>名称<TextInput value={departmentForm.name} onChange={(event) => setDepartmentForm((current) => ({ ...current, name: event.target.value }))} /></label>
+              <label className={styles["admin-field"]}>父部门<NumericInput  value={String(departmentForm.parentid)} useGrouping={false} onValueCommit={(value) => setDepartmentForm((current) => ({ ...current, parentid: Number(value) }))} /></label>
+              <label className={styles["admin-field"]}>排序<NumericInput  value={String(departmentForm.order)} useGrouping={false} onValueCommit={(value) => setDepartmentForm((current) => ({ ...current, order: Number(value) }))} /></label>
+              <label className={styles["admin-field"]}>英文名<TextInput value={departmentForm.name_en} onChange={(event) => setDepartmentForm((current) => ({ ...current, name_en: event.target.value }))} /></label>
             </div>
             <div className={styles["form-actions"]}>
-              <button className={cx(styles["admin-primary-action"], styles["full-width"])} disabled={saving} onClick={() => void saveDepartment()}>
+              <Button variant="primary" className={cx(styles["admin-primary-action"], styles["full-width"])} disabled={saving} onClick={() => void saveDepartment()}>
                 {editingDepartmentId ? "保存部门" : "创建部门"}
-              </button>
-              {editingDepartmentId && <button className={styles["table-action"]} disabled={saving} onClick={resetDepartmentForm}>取消</button>}
+              </Button>
+              {editingDepartmentId && <Button variant="ghost" className={styles["table-action"]} disabled={saving} onClick={resetDepartmentForm}>取消</Button>}
             </div>
           </div>
         </div>
@@ -705,7 +668,7 @@ function WeComListState({ message, retry }: { message: string; retry: () => void
   return (
     <div className={styles["wecom-list-state"]}>
       <span>{message}</span>
-      <button className={styles["table-action"]} type="button" onClick={retry}>重试</button>
+      <Button variant="ghost" className={styles["table-action"]} type="button" onClick={retry}>重试</Button>
     </div>
   );
 }

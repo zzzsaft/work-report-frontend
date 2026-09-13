@@ -3,7 +3,7 @@
 ## 项目边界
 
 - 本项目复用 `D:\jdy_backend1\my-react-app` 的登录验证架构。
-- 当前只包含企业微信登录、验证码换取令牌、令牌校验和登录状态持久化。
+- 当前包含企业微信/账号登录、手机报工和生产管理；登录与报工域职责分离。
 - 不从参考项目复制报价、客户、模板、定位、简道云或企业微信 JS-SDK 等业务代码。
 
 ## 企业微信登录参数
@@ -31,3 +31,13 @@
 ## 验证
 
 - 修改后运行 `npm run build` 和 `npm run lint`。
+- UI 修改同时运行 `npm run check:ui` 和 `npm run test:ui`。后者使用独立端口和隔离模拟数据，不连接生产服务。
+
+## 公共 UI
+
+- 使用已发布的精确版本 `@jc-times/business-ui`，提交 `package-lock.json`；不跨仓引用源码或软链接。
+- 全局样式入口为 `src/styles/index.css`，现有品牌主题通过 `src/styles/business-ui.css` 映射 `--ui-*`；不要改为公共库默认品牌色。
+- 通用表单、按钮、标签、分页、日期、弹窗和确认使用公共组件；业务包装位于 `src/components/ui/`。
+- 模态固定操作使用公共 `footer` 插槽；不重写焦点陷阱或调用浏览器 `confirm`。
+- 专用 Handsontable 仅保留批量粘贴编辑场景，普通列表统一使用公共 DataTable。
+- 私有包凭据由开发环境提供，不写入项目或记忆；接入说明见 `docs/PUBLIC_UI_MIGRATION.md`。

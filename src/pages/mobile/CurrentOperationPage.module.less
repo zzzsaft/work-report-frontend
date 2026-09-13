@@ -47,13 +47,13 @@
 .action-dock { position: fixed; z-index: 20; right: 0; bottom: calc(76px + env(safe-area-inset-bottom)); left: 0; display: grid; gap: 10px; padding: 12px 20px; border-top: 1px solid #e6eaf0;
   background: rgb(255 255 255 / 97%); }
 
-.primary-action,.secondary-action { display: flex; min-height: 64px; align-items: center; justify-content: center; gap: 12px; border-radius: 12px; font-size: 24px; font-weight: 800; }
+.primary-action,.secondary-action { --ui-min-target-height: 64px; display: flex; min-height: 64px; align-items: center; justify-content: center; gap: 12px; border-radius: 12px; font-size: 24px; font-weight: 800; }
 
 .primary-action { border: 0;
   color: #fff;
   background: linear-gradient(110deg, var(--blue-700), #075dde); box-shadow: 0 8px 20px rgb(10 76 181 / 20%); }
 
-.secondary-action { min-height: 58px; border: 2px solid var(--blue-700);
+.secondary-action { --ui-min-target-height: 58px; min-height: 58px; border: 2px solid var(--blue-700);
   color: var(--blue-700);
   background: #fff; }
 
@@ -83,7 +83,7 @@
 
 .step-title small { color: var(--muted); }
 
-.photo-picker { display: flex; width: 100%; min-height: 92px; align-items: center; justify-content: center; gap: 10px; border: 2px dashed #9ab7dd; border-radius: 12px;
+.photo-picker { --ui-min-target-height: 92px; display: flex; width: 100%; min-height: 92px; align-items: center; justify-content: center; gap: 10px; border: 2px dashed #9ab7dd; border-radius: 12px;
   color: var(--blue-700);
   background: var(--blue-50); font-weight: 800; }
 
@@ -104,7 +104,7 @@
 .submit-completion { width: 100%; }
 
 /* Keep every critical work-order field visible above the fixed action dock. */
-.current-page .info-row { min-height: 68px; }
+.current-page .info-row { --ui-min-target-height: 68px; min-height: 68px; }
 
 .current-page .operation-row { min-height: 88px; }
 
@@ -135,7 +135,7 @@
 
 .next-operation-list { display: grid; gap: 11px; padding-bottom: 6px; }
 
-.next-operation-list > button { position: relative; display: grid; width: 100%; min-height: 146px; gap: 5px; border: 1.5px solid #c7d8ee; border-radius: 13px; padding: 15px 46px 15px 16px;
+.next-operation-list > button { --ui-min-target-height: 146px; position: relative; display: grid; width: 100%; min-height: 146px; gap: 5px; border: 1.5px solid #c7d8ee; border-radius: 13px; padding: 15px 46px 15px 16px;
   color: var(--ink);
   background: #fff; text-align: left; }
 
