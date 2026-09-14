@@ -84,7 +84,7 @@ export function ClaimOperationsPage() {
   };
 
   return <div className={cx(styles["standard-page"], styles["claim-page"])}>
-    <PageHeader title="领取工序" subtitle="搜索产品编号，选择部件后领取自己的工序" />
+    <PageHeader title="领取工序" subtitle="搜索产品编号或工单号，选择部件后领取自己的工序" />
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
     <ClaimOperationsPanel loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimedOperation} startTime={startTime} endTime={endTime} timesLoading={timesLoading} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={(operationId) => { const op = claimOperations.find((o: ClaimableOperation) => o.id === operationId) || recentClaimOperations.find((o: ClaimableOperation) => o.id === operationId); if (op) setClaimedOperation(op); }} onConfirmClaim={handleConfirmClaim} onCancelClaim={handleCancelClaim} />
   </div>;

@@ -170,6 +170,7 @@ export interface ClaimableProduct {
   productCode: string;
   productName: string;
   remainingQuantity: number;
+  hasPermission?: boolean;
 }
 
 export interface ClaimablePart {
@@ -180,6 +181,7 @@ export interface ClaimablePart {
   partName: string;
   operationCount: number;
   remainingQuantity: number;
+  hasPermission?: boolean;
 }
 
 export interface ClaimableOperation {
@@ -202,6 +204,7 @@ export interface ClaimableOperation {
   claimedWorkers: number;
   maxClaimWorkers?: number;
   status: "available" | "claimed" | "closed";
+  hasPermission?: boolean;
 }
 
 export interface LeaderImportDraft {

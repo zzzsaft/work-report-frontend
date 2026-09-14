@@ -65,6 +65,10 @@
 .claim-columns button.selected { border-color: var(--blue-700);
   background: var(--blue-50); box-shadow: 0 0 0 2px rgb(20 95 209 / 10%); }
 
+.claim-columns button.no-permission { background: #fff5f5; opacity: .75; }
+
+.claim-columns button.no-permission small { color: var(--danger); font-weight: 700; }
+
 .claim-columns button strong { color: var(--navy-900); font-size: 18px; }
 
 .claim-columns button span { color: #344054; }
@@ -91,6 +95,13 @@
 
 .claim-operation-list article span.claim-status-closed,.recent-operation-list article span.claim-status-closed { color: var(--danger);
   background: var(--danger-bg); }
+
+.claim-operation-list article.no-permission,.recent-operation-list article.no-permission { background: #fff5f5; opacity: .75; }
+
+.claim-operation-list article span.claim-status-no-permission,.recent-operation-list article span.claim-status-no-permission { color: var(--danger);
+  background: var(--danger-bg); }
+
+.claim-operation-list .no-permission-hint,.recent-operation-list .no-permission-hint { color: var(--danger); font-size: 13px; margin: 4px 0 0; padding: 0; border: 0; background: none; border-radius: 0; font-weight: 600; }
 
 .claim-operation-list article p,.recent-operation-list article p { margin: 0;
   color: var(--muted); font-size: 15px; line-height: 1.6; }
