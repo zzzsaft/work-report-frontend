@@ -1,3 +1,4 @@
+import { Alert, Button, EmptyState, TextInput } from "@jc-times/business-ui";
 import { useState } from "react";
 import { Search, X } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
@@ -50,10 +51,8 @@ export function WorkerPickerModal({ newOpCode, onOpCodeChange, onPicked, onCance
   return (
     <div className={cx(styles["worker-picker-modal"])}>
       <div className={cx(styles["modal-field"])}>
-        <label>
-          工序编码 <span className={cx(styles["required-mark"])}>*</span>
-        </label>
-        <input
+
+        <TextInput label={<>工序编码 <span className={cx(styles["required-mark"])}>*</span></>}
           value={newOpCode}
           onChange={(e) => onOpCodeChange(e.target.value)}
           placeholder="输入工序编码，如 CJ-JJMC"
@@ -64,7 +63,7 @@ export function WorkerPickerModal({ newOpCode, onOpCodeChange, onPicked, onCance
       <div className={cx(styles["modal-divider"])} />
       <div className={cx(styles["modal-subtitle"])}>选择人员</div>
       <div className={cx(styles["worker-picker-head"])}>
-        <input
+        <TextInput aria-label="搜索姓名/工号"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="搜索姓名/工号"
@@ -72,16 +71,16 @@ export function WorkerPickerModal({ newOpCode, onOpCodeChange, onPicked, onCance
             if (e.key === "Enter") void search();
           }}
         />
-        <button className={cx(styles["table-action"])} onClick={() => void search()}>
+        <Button aria-label={"搜索"} variant="ghost" className={cx(styles["table-action"])} onClick={() => void search()}>
           <Search />
-        </button>
+        </Button>
       </div>
-      {loading && <div className={cx(styles["empty-inline"])}>搜索中...</div>}
-      {!loading && error && <div className={cx(styles["admin-message"])}>{error}</div>}
+      {loading && <EmptyState className={cx(styles["empty-inline"])} compact title={<>搜索中...</>} />}
+      {!loading && error && <Alert className={cx(styles["admin-message"])} tone={"info"} description={<>{error}</>} />}
       {!loading &&
         !error &&
         workers.map((w) => (
-          <button
+          <Button variant="ghost"
             key={w.id}
             className={cx(styles["worker-picker-inline-item"])}
             onClick={() => void pick(w)}
@@ -93,16 +92,16 @@ export function WorkerPickerModal({ newOpCode, onOpCodeChange, onPicked, onCance
                 {w.employeeNo} · {w.teamName}
               </small>
             </div>
-          </button>
+          </Button>
         ))}
       {!loading && !error && !workers.length && (
-        <div className={cx(styles["empty-inline"])}>输入关键词搜索人员</div>
+        <EmptyState className={cx(styles["empty-inline"])} compact title={<>输入关键词搜索人员</>} />
       )}
       <div className={cx(styles["modal-footer"])}>
-        <button className={cx(styles["table-action"])} onClick={onCancel}>
+        <Button variant="ghost" className={cx(styles["table-action"])} onClick={onCancel}>
           <X />
           取消
-        </button>
+        </Button>
       </div>
     </div>
   );

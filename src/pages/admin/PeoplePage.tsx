@@ -1,5 +1,7 @@
+import { Badge, Button, EmptyState, MultiSelect, SegmentedControl, SelectInput } from "@jc-times/business-ui";
+import { ReportTable } from "@/components/ui/ReportTable";
 import { useEffect, useState } from "react";
-import { Search, ChevronDown, X, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
 import { AdminHeader, AdminError, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
@@ -57,33 +59,32 @@ function TeamOperationStatsSection() {
 
   return (
     <>
-      <div className={cx(styles["content-header"])}>
-        <div>
+      <div className={cx(styles["content-header"])} style={{ flexWrap: "wrap", gap: 16 }}>
+        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
           <h2>班组工序工时偏差</h2>
           <p>按班组-人员-工序统计累计与当月的计划/实际工时，偏差值 = 实际报工工时 − 总计划工时</p>
         </div>
-        <button
+        <Button variant="primary"
+          style={{ flexShrink: 0, whiteSpace: "nowrap" }}
           className={cx(styles["export-csv-btn"])}
           onClick={handleExport}
           disabled={exporting || loading || rows.length === 0}
         >
           <Download />
           {exporting ? "导出中..." : "导出CSV"}
-        </button>
+        </Button>
       </div>
       <div className={cx(styles["reports-filter"])} style={{ marginBottom: 12 }}>
         <div className={cx(styles["filter-select"])}>
-          <label>公司</label>
-          <select value={queryCompany} onChange={(e) => setQueryCompany(e.target.value as CompanyFilter)}>
+          <SelectInput label="公司" value={queryCompany} onChange={(e) => setQueryCompany(e.target.value as CompanyFilter)}>
             {companyOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
-          </select>
+          </SelectInput>
         </div>
         <div className={cx(styles["filter-select"])}>
-          <label>班组</label>
-          <select value={queryTeam} onChange={(e) => setQueryTeam(e.target.value)}>
+          <SelectInput label="班组" value={queryTeam} onChange={(e) => setQueryTeam(e.target.value)}>
             <option value="">全部班组</option>
             {teams.map((team) => <option key={team.id} value={team.name}>{team.name}</option>)}
-          </select>
+          </SelectInput>
         </div>
       </div>
       {loading ? (
@@ -92,89 +93,22 @@ function TeamOperationStatsSection() {
         <AdminError message={error} retry={() => void reload()} />
       ) : rows.length === 0 ? (
         <section className={cx(styles["admin-panel"])}>
-          <div className={styles["empty-inline"]}>暂无可统计的报工数据</div>
+          <EmptyState compact title="暂无可统计的报工数据" />
         </section>
       ) : (
         <section className={cx(styles["admin-panel"])}>
           <div className={styles["table-wrap"]}>
-            <table>
-              <thead>
-                <tr>
-                  <th>班组</th>
-                  <th>生产人员</th>
-                  <th>工序名称</th>
-                  <th>总计划工时</th>
-                  <th>实际报工工时</th>
-                  <th>偏差值</th>
-                  <th>当月计划工时</th>
-                  <th>当月实际工时</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const positive = row.deviationHours > 0;
-                  const negative = row.deviationHours < 0;
-                  return (
-                    <tr key={`${row.workerId}-${row.operationName}`}>
-                      <td>{row.teamName}</td>
-                      <td>
-                        <strong>{row.workerName}</strong>
-                      </td>
-                      <td>{row.operationName}</td>
-                      <td>{row.totalPlannedHours.toFixed(1)}h</td>
-                      <td>{row.totalActualHours.toFixed(1)}h</td>
-                      <td>
-                        <strong
-                          style={{
-                            color: positive ? "#d83931" : negative ? "#1a9c54" : "#333"
-                          }}
-                        >
-                          {positive ? "+" : ""}
-                          {row.deviationHours.toFixed(1)}h
-                        </strong>
-                      </td>
-                      <td>{row.monthPlannedHours.toFixed(1)}h</td>
-                      <td>{row.monthActualHours.toFixed(1)}h</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={3}>
-                    <strong>合计</strong>
-                  </td>
-                  <td>
-                    <strong>{totals.planned.toFixed(1)}h</strong>
-                  </td>
-                  <td>
-                    <strong>{totals.actual.toFixed(1)}h</strong>
-                  </td>
-                  <td>
-                    <strong
-                      style={{
-                        color:
-                          totals.actual - totals.planned > 0
-                            ? "#d83931"
-                            : totals.actual - totals.planned < 0
-                              ? "#1a9c54"
-                              : "#333"
-                      }}
-                    >
-                      {(totals.actual - totals.planned > 0 ? "+" : "") +
-                        (totals.actual - totals.planned).toFixed(1)}
-                      h
-                    </strong>
-                  </td>
-                  <td>
-                    <strong>{totals.monthPlanned.toFixed(1)}h</strong>
-                  </td>
-                  <td>
-                    <strong>{totals.monthActual.toFixed(1)}h</strong>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            <ReportTable columns={['班组', '生产人员', '工序名称', '总计划工时', '实际报工工时', '偏差值', '当月计划工时', '当月实际工时'].map(title => ({ title }))}
+              rows={[...rows.map(row => ({ id: JSON.stringify([row.teamName, row.workerId, row.operationName]), cells: [
+                row.teamName, <strong>{row.workerName}</strong>, row.operationName,
+                row.totalPlannedHours.toFixed(1) + 'h', row.totalActualHours.toFixed(1) + 'h',
+                <strong style={{ color: row.deviationHours > 0 ? 'var(--danger)' : row.deviationHours < 0 ? 'var(--success)' : 'var(--ink)' }}>{row.deviationHours > 0 ? '+' : ''}{row.deviationHours.toFixed(1)}h</strong>,
+                row.monthPlannedHours.toFixed(1) + 'h', row.monthActualHours.toFixed(1) + 'h'
+              ] })), { id: 'total', cells: [<strong>合计</strong>, '', '',
+                totals.planned.toFixed(1) + 'h', totals.actual.toFixed(1) + 'h',
+                <strong style={{ color: totals.actual > totals.planned ? 'var(--danger)' : totals.actual < totals.planned ? 'var(--success)' : 'var(--ink)' }}>{totals.actual > totals.planned ? '+' : ''}{(totals.actual - totals.planned).toFixed(1)}h</strong>,
+                totals.monthPlanned.toFixed(1) + 'h', totals.monthActual.toFixed(1) + 'h'
+              ] }]} />
           </div>
         </section>
       )}
@@ -190,11 +124,7 @@ export default function PeoplePage() {
     setCompany,
     selectedNames,
     setSelectedNames,
-    dropdownOpen,
-    setDropdownOpen,
     nameOptions,
-    searchKeyword,
-    setSearchKeyword,
     staff,
     loading,
     error,
@@ -202,10 +132,6 @@ export default function PeoplePage() {
     maxHours,
     totalHours,
     periodLabel,
-    filteredOptions,
-    toggleName,
-    removeName,
-    selectAll
   } = useStaffStats();
 
   return (
@@ -215,94 +141,22 @@ export default function PeoplePage() {
         description={`${periodLabel}员工工时汇总`}
         action={
           <div className={styles["staff-controls"]}>
-            <div className={styles["filter-select"]}>
-              <label>公司</label>
-              <select value={company} onChange={(event) => setCompany(event.target.value as CompanyFilter)}>
+            <div>
+
+              <SelectInput label={<>公司</>} value={company} onChange={(event) => setCompany(event.target.value as CompanyFilter)}>
                 {companyOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
-              </select>
+              </SelectInput>
             </div>
-            <div className={styles["dropdown-filter"]}>
-              <div
-                className={styles["dropdown-display"]}
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-              >
-                <Search className={styles["search-icon"]} />
-                {selectedNames.length === 0 ? (
-                  <span className={styles["dropdown-placeholder"]}>选择工序名称筛选</span>
-                ) : (
-                  <span className={styles["dropdown-count"]}>已选 {selectedNames.length} 个</span>
-                )}
-                <ChevronDown className={styles["dropdown-arrow"]} />
-              </div>
-              {dropdownOpen && (
-                <div className={styles["dropdown-panel"]}>
-                  <div className={styles["dropdown-search"]}>
-                    <Search className={styles["search-icon"]} />
-                    <input
-                      value={searchKeyword}
-                      onChange={(e) => setSearchKeyword(e.target.value)}
-                      placeholder="搜索工序名称"
-                      className={styles["dropdown-search-input"]}
-                    />
-                  </div>
-                  <div className={styles["dropdown-actions"]}>
-                    <button onClick={selectAll} className={styles["dropdown-action-btn"]}>
-                      {selectedNames.length === nameOptions.length && nameOptions.length > 0
-                        ? "取消全选"
-                        : "全选"}
-                    </button>
-                    {selectedNames.length > 0 && (
-                      <button
-                        onClick={() => setSelectedNames([])}
-                        className={styles["dropdown-action-btn"]}
-                      >
-                        清空
-                      </button>
-                    )}
-                  </div>
-                  <div className={styles["dropdown-options"]}>
-                    {filteredOptions.length === 0 ? (
-                      <div className={styles["dropdown-empty"]}>无可选工序</div>
-                    ) : (
-                      filteredOptions.map((name) => (
-                        <label key={name} className={styles["dropdown-option"]}>
-                          <input
-                            type="checkbox"
-                            checked={selectedNames.includes(name)}
-                            onChange={() => toggleName(name)}
-                          />
-                          <span>{name}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
+            <div className={styles["staff-process-filter"]}>
+              <MultiSelect label="工序名称" placeholder="选择工序名称筛选" values={selectedNames}
+                onValuesChange={setSelectedNames} items={nameOptions.map((name) => ({ id: name, label: name }))} />
+              <Button variant="ghost" disabled={!nameOptions.length}
+                onClick={() => setSelectedNames(selectedNames.length === nameOptions.length ? [] : [...nameOptions])}>
+                {nameOptions.length > 0 && selectedNames.length === nameOptions.length ? "取消全选" : "全选"}
+              </Button>
             </div>
-            {selectedNames.length > 0 && (
-              <div className={styles["selected-tags"]}>
-                {selectedNames.map((name) => (
-                  <span key={name} className={styles["selected-tag"]}>
-                    {name}
-                    <X className={styles["tag-close"]} onClick={() => removeName(name)} />
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className={styles["period-tabs"]}>
-              <button
-                className={period === "month" ? styles.periodActive : undefined}
-                onClick={() => setPeriod("month")}
-              >
-                本月
-              </button>
-              <button
-                className={period === "lastMonth" ? styles.periodActive : undefined}
-                onClick={() => setPeriod("lastMonth")}
-              >
-                上月
-              </button>
-            </div>
+            <SegmentedControl<"month" | "lastMonth"> aria-label="统计期间" value={period} onChange={setPeriod}
+              options={[{ value: "month", label: "本月" }, { value: "lastMonth", label: "上月" }]} block={false} variant="soft" />
           </div>
         }
       />
@@ -312,7 +166,7 @@ export default function PeoplePage() {
         <AdminError message={error} retry={() => void reload()} />
       ) : staff.length === 0 ? (
         <section className={cx(styles["admin-panel"])}>
-          <div className={styles["empty-inline"]}>暂无{periodLabel}工时数据</div>
+          <EmptyState className={styles["empty-inline"]} compact title={<>暂无{periodLabel}工时数据</>} />
         </section>
       ) : (
         <>
@@ -332,56 +186,35 @@ export default function PeoplePage() {
           </section>
           <section className={cx(styles["admin-panel"])}>
             <div className={styles["table-wrap"]}>
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 60 }}>排名</th>
-                    <th>生产人员</th>
-                    <th>总工时</th>
-                    <th>工时占比</th>
-                    <th>完成工序</th>
-                    <th>出勤天数</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {staff.map((item, index) => {
+              <ReportTable  columns={[{ title: "排名", width: 60 },
+{ title: "生产人员" },
+{ title: "总工时" },
+{ title: "工时占比" },
+{ title: "完成工序" },
+{ title: "出勤天数" }]} rows={staff.map((item, index) => {
                     const pct = totalHours > 0 ? (item.totalHours / totalHours) * 100 : 0;
                     const barWidth = (item.totalHours / maxHours) * 100;
                     return (
-                      <tr key={item.workerId}>
-                        <td>
-                          <span
+                      ({ id: String(item.workerId), cells: [<><Badge
                             className={cx(styles["rank-badge"], index < 3 && styles[`rank-${index + 1}`])}
                           >
                             {index + 1}
-                          </span>
-                        </td>
-                        <td>
-                          <div className={styles["person-cell"]}>
+                          </Badge></>,
+<><div className={styles["person-cell"]}>
                             <span>{item.workerName.slice(0, 1)}</span>
                             <strong>{item.workerName}</strong>
-                          </div>
-                        </td>
-                        <td>
-                          <strong className={styles["hours-value"]}>{item.totalHours.toFixed(1)}h</strong>
-                        </td>
-                        <td>
-                          <div className={styles["hours-bar-wrap"]}>
+                          </div></>,
+<><strong className={styles["hours-value"]}>{item.totalHours.toFixed(1)}h</strong></>,
+<><div className={styles["hours-bar-wrap"]}>
                             <div className={styles["hours-bar"]} style={{ width: `${barWidth}%` }} />
                             <span className={styles["hours-bar-label"]}>{pct.toFixed(1)}%</span>
-                          </div>
-                        </td>
-                        <td>
-                          {item.completedOperations} 道
-                        </td>
-                        <td>
-                          {item.attendanceDays} 天
-                        </td>
-                      </tr>
+                          </div></>,
+<>{item.completedOperations}道
+                        </>,
+<>{item.attendanceDays}天
+                        </> ] })
                     );
-                  })}
-                </tbody>
-              </table>
+                  })} emptyTitle={"暂无数据"} />
             </div>
           </section>
         </>

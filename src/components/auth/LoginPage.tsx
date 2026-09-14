@@ -1,3 +1,4 @@
+import { Button, TextInput } from "@jc-times/business-ui";
 import { useMemo, useState, type FormEvent } from "react";
 import { Building2, LogIn } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -47,7 +48,7 @@ export function LoginPage({ redirect }: { redirect: string }) {
         <form className={styles.form} onSubmit={(event) => void submit(event)}>
           <label>
             <span>账号</span>
-            <input
+            <TextInput
               autoComplete="username"
               autoFocus
               name="username"
@@ -58,7 +59,7 @@ export function LoginPage({ redirect }: { redirect: string }) {
           </label>
           <label>
             <span>密码</span>
-            <input
+            <TextInput
               autoComplete="current-password"
               name="password"
               placeholder="请输入密码"
@@ -68,12 +69,12 @@ export function LoginPage({ redirect }: { redirect: string }) {
             />
           </label>
           {error && <div className={styles.error}>{error}</div>}
-          <button className={styles.primaryButton} disabled={isLoading} type="submit">
+          <Button variant="primary" className={styles.primaryButton} disabled={isLoading} type="submit">
             {isLoading ? <span className="spinner small" /> : <LogIn />}
             登录
-          </button>
+          </Button>
         </form>
-        <button
+        <Button variant="ghost"
           className={styles.secondaryButton}
           disabled={isLoading}
           type="button"
@@ -81,7 +82,7 @@ export function LoginPage({ redirect }: { redirect: string }) {
         >
           <Building2 />
           企业微信登录
-        </button>
+        </Button>
       </section>
     </main>
   );

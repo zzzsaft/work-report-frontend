@@ -1,3 +1,4 @@
+import { Button } from "@jc-times/business-ui";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useLogout } from "@/hooks/useLogout";
 import styles from "@/components/auth/AuthShared.module.less";
@@ -32,9 +33,9 @@ export default function LoginTestPage() {
         </dl>
 
         <p className={styles["test-hint"]}>这是登录验证测试页面</p>
-        <button className={styles["logout-button"]} type="button" onClick={logout}>
+        <Button variant="ghost" className={styles["logout-button"]} type="button" onClick={logout}>
           退出并重新测试
-        </button>
+        </Button>
       </section>
     </main>
   );

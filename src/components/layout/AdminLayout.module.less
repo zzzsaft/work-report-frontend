@@ -319,3 +319,11 @@
 .claim-workspace { padding: 13px; } }
 
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@media (max-width: 600px) {
+  .admin-topbar { height: 64px; gap: 8px; padding-inline: 12px; }
+  .admin-topbar .production-status { display: none; }
+  .admin-topbar .menu-button,
+  .admin-topbar .logout-button { flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 0; }
+  .admin-topbar .topbar-actions { flex: 1; min-width: 0; justify-content: flex-end; gap: 6px; }
+  .admin-topbar .topbar-actions a { flex-shrink: 0; height: 44px; min-height: 44px; white-space: nowrap; font-size: 13px; padding-inline: 10px; }
+}

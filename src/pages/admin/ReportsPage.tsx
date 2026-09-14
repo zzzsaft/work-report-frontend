@@ -1,3 +1,5 @@
+import { Badge, Button, DateInput, NumericInput, Pagination, SelectInput, TextInput } from "@jc-times/business-ui";
+import { ReportTable } from "@/components/ui/ReportTable";
 import { useCallback, useMemo, useState } from "react";
 import { Check, Download, Edit3, Search, X } from "lucide-react";
 import { workReportRepository } from "@/api/services/workReport.service";
@@ -24,7 +26,6 @@ export default function ReportsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [editingHours, setEditingHours] = useState("");
   const [message, setMessage] = useState("");
@@ -36,11 +37,9 @@ export default function ReportsPage() {
     setTotal(data.total);
     setPage(data.page);
     setPageSize(Math.min(100, Math.max(1, data.pageSize)));
-    setHasMore(data.hasMore);
     return data.items;
   }, [reportFilters, page, pageSize]);
   const { data: reports = [], loading, error, reload } = useAsyncResource<ReportRecord[]>(load);
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -136,131 +135,102 @@ export default function ReportsPage() {
     }
   };
 
-  if (loading) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><LoadingTable /></section></>;
-  if (error) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</button>} /><section className={cx(styles["admin-panel"])}><AdminError message={error} retry={() => void reload()} /></section></>;
+  if (loading) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<Button variant="ghost" className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</Button>} /><section className={cx(styles["admin-panel"])}><LoadingTable /></section></>;
+  if (error) return <><AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<Button variant="ghost" className={cx(styles["export-csv-btn"])} disabled><Download />导出CSV</Button>} /><section className={cx(styles["admin-panel"])}><AdminError message={error} retry={() => void reload()} /></section></>;
 
   return (<>
-    <AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<button className={cx(styles["export-csv-btn"])} onClick={() => void exportToExcel()} disabled={exporting}><Download />{exporting ? "导出中..." : "导出CSV"}</button>} />
+    <AdminHeader title="报工记录" description="按工单、人员和状态追踪每一次报工" action={<Button variant="ghost" className={cx(styles["export-csv-btn"])} onClick={() => void exportToExcel()} disabled={exporting}><Download />{exporting ? "导出中..." : "导出CSV"}</Button>} />
     <section className={cx(styles["admin-panel"])}>
       {message && <div className={cx(styles["reports-message"])}>{message}</div>}
       <div className={cx(styles["reports-filter"])}>
         <div className={cx(styles["filter-search"])}>
           <Search />
-          <input type="text" value={filters.keyword} onChange={(e) => handleFilterChange("keyword", e.target.value)} placeholder="搜索工单、产品、工序或人员" />
+          <TextInput aria-label="搜索工单、产品、工序或人员" type="text" value={filters.keyword} onChange={(e) => handleFilterChange("keyword", e.target.value)} placeholder="搜索工单、产品、工序或人员" />
         </div>
         <div className={cx(styles["filter-input"])}>
-          <label>工单编号</label>
-          <input type="text" value={filters.orderNo} onChange={(e) => handleFilterChange("orderNo", e.target.value)} placeholder="工单编号" />
+
+          <TextInput label={<>工单编号</>} type="text" value={filters.orderNo} onChange={(e) => handleFilterChange("orderNo", e.target.value)} placeholder="工单编号" />
         </div>
         <div className={cx(styles["filter-select"])}>
-          <label>公司</label>
-          <select value={filters.company} onChange={(e) => handleFilterChange("company", e.target.value as CompanyFilter)}>
+
+          <SelectInput label={<>公司</>} value={filters.company} onChange={(e) => handleFilterChange("company", e.target.value as CompanyFilter)}>
             {companyOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
-          </select>
+          </SelectInput>
         </div>
         <div className={cx(styles["filter-input"])}>
-          <label>人员姓名</label>
-          <input type="text" value={filters.operatorName} onChange={(e) => handleFilterChange("operatorName", e.target.value)} placeholder="人员姓名" />
+
+          <TextInput label={<>人员姓名</>} type="text" value={filters.operatorName} onChange={(e) => handleFilterChange("operatorName", e.target.value)} placeholder="人员姓名" />
         </div>
         <div className={cx(styles["filter-select"])}>
-          <label>状态</label>
-          <select value={filters.status} onChange={(e) => handleFilterChange("status", e.target.value)}>
+
+          <SelectInput label={<>状态</>} value={filters.status} onChange={(e) => handleFilterChange("status", e.target.value)}>
             <option value="">全部</option>
             <option value="claimed">待开始</option>
             <option value="running">进行中</option>
             <option value="paused">已暂停</option>
             <option value="completed">已完成</option>
-          </select>
+          </SelectInput>
         </div>
         <div className={cx(styles["filter-input"])}>
-          <label>工序号</label>
-          <input type="text" value={filters.operationCode} onChange={(e) => handleFilterChange("operationCode", e.target.value)} placeholder="工序号" />
+
+          <TextInput label={<>工序号</>} type="text" value={filters.operationCode} onChange={(e) => handleFilterChange("operationCode", e.target.value)} placeholder="工序号" />
         </div>
         <div className={cx(styles["filter-input"])}>
-          <label>工序名称</label>
-          <input type="text" value={filters.operationName} onChange={(e) => handleFilterChange("operationName", e.target.value)} placeholder="工序名称" />
+
+          <TextInput label={<>工序名称</>} type="text" value={filters.operationName} onChange={(e) => handleFilterChange("operationName", e.target.value)} placeholder="工序名称" />
         </div>
         <div className={cx(styles["filter-date"])}>
-          <input type="date" value={filters.startTime} onChange={(e) => handleFilterChange("startTime", e.target.value)} />
-          <span>至</span>
-          <input type="date" value={filters.endTime} onChange={(e) => handleFilterChange("endTime", e.target.value)} />
+          <label>开始日期<DateInput aria-label="开始日期" value={filters.startTime} onValueChange={(value) => handleFilterChange("startTime", value)} /></label>
+          <label>结束日期<DateInput aria-label="结束日期" value={filters.endTime} onValueChange={(value) => handleFilterChange("endTime", value)} /></label>
         </div>
         <div className={cx(styles["filter-actions"])}>
-          <button className={cx(styles["filter-search-btn"])} onClick={handleSearch}><Search />搜索</button>
-          <button className={cx(styles["filter-reset-btn"])} onClick={handleResetFilters}>重置</button>
+          <Button variant="primary" className={cx(styles["filter-search-btn"])} onClick={handleSearch}><Search />搜索</Button>
+          <Button variant="ghost" className={cx(styles["filter-reset-btn"])} onClick={handleResetFilters}>重置</Button>
         </div>
       </div>
       <div className={cx(styles["table-wrap"])}>
-        <table className={cx(styles["reports-table"])}>
-          <thead>
-            <tr>
-              <th style={{ width: 100 }}>工单</th>
-              <th style={{ width: 110 }}>产品</th>
-              <th style={{ width: 60 }}>部件序号</th>
-              <th style={{ width: 110 }}>部件</th>
-              <th style={{ width: 120 }}>工序</th>
-              <th style={{ width: 140 }}>工艺内容</th>
-              <th style={{ width: 70 }}>数量</th>
-              <th style={{ width: 100 }}>分摊工时</th>
-              <th style={{ width: 80 }}>原工时</th>
-              <th style={{ width: 80 }}>领取人员</th>
-              <th style={{ width: 70 }}>来源</th>
-              <th style={{ width: 130 }}>开工时间</th>
-              <th style={{ width: 130 }}>完工时间</th>
-              <th style={{ width: 130 }}>领取时间</th>
-              <th style={{ width: 80 }}>实际工时</th>
-              <th style={{ width: 80 }}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reports.map((item) => {
+        <ReportTable className={cx(styles["reports-table"])} columns={[{ title: "工单", width: 100 },
+{ title: "产品", width: 110 },
+{ title: "部件序号", width: 60 },
+{ title: "部件", width: 110 },
+{ title: "工序", width: 120 },
+{ title: "工艺内容", width: 140 },
+{ title: "数量", width: 70 },
+{ title: "分摊工时", width: 100 },
+{ title: "原工时", width: 80 },
+{ title: "领取人员", width: 80 },
+{ title: "来源", width: 70 },
+{ title: "开工时间", width: 130 },
+{ title: "完工时间", width: 130 },
+{ title: "领取时间", width: 130 },
+{ title: "实际工时", width: 80 },
+{ title: "操作", width: 80 }]} rows={reports.map((item) => {
               const allocation = item.hourAllocation;
               const allocationTitle = allocation ? `工时分摊说明\n${hourAllocationTooltip}\n分摊方式：${allocationMethodLabel(allocation.allocationMethod)}\n分摊比例：${formatAllocationRatio(allocation.allocationRatio)}\n实际时长：${formatAllocationBasisHours(allocation.allocationBasisSeconds)}\n参与人数：${allocation.allocationParticipantCount ?? "-"}${allocation.allocationApplied === false ? `\n${hourAllocationFallbackText}` : ""}` : undefined;
-              return (<tr key={item.id}>
-              <td><strong>{item.orderNo}</strong></td>
-              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.partCode}</span></div></td>
-              <td><strong>{item.partNo}</strong></td>
-              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></td>
-              <td><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></td>
-              <td className={cx(styles["operation-note-cell"])} title={(item.operationNote || "").replace(/\n/g, " ")}>{(item.operationNote || "").replace(/\n/g, " ") || "-"}</td>
-              <td><strong>{item.plannedQuantity}</strong></td>
-              <td><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <span className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</span>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></td>
-              <td><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></td>
-              <td className={cx(styles["operator-cell"])}>{item.operatorName}</td>
-              <td>自主领取</td>
-              <td>{item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "-"}</td>
-              <td>{item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "-"}</td>
-              <td>{item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "-"}</td>
-              <td>
-                {editingId === item.id ? (<div className={cx(styles["edit-cell"])}>
-                  <input type="number" min="0" step="0.1" value={editingHours} onChange={(e) => setEditingHours(e.target.value)} />
-                </div>) : (<span className={cx(styles["hours-value"])}>{item.durationHours.toFixed(2)} 小时</span>)}
-              </td>
-              <td>
-                {editingId === item.id ? (<div className={cx(styles["edit-actions"])}>
-                  <button className={cx(styles["table-action"], styles["confirm-btn"])} onClick={() => handleSaveHours(item)}><Check /></button>
-                  <button className={cx(styles["table-action"], styles["cancel-btn"])} onClick={handleCancelEdit}><X /></button>
-                </div>) : (<button className={cx(styles["edit-btn"])} onClick={() => handleEditHours(item)}><Edit3 />修改</button>)}
-              </td>
-            </tr>);
-            })}
-            {!reports.length && <tr><td colSpan={16}>没有匹配的报工记录。</td></tr>}
-          </tbody>
-        </table>
+              return (({ id: String(item.id), cells: [<><strong>{item.orderNo}</strong></>,
+<><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.partCode}</span></div></>,
+<><strong>{item.partNo}</strong></>,
+<><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></>,
+<><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></>,
+<div className={cx(styles["operation-note-cell"])} title={(item.operationNote || "").replace(/\n/g, " ")}>{(item.operationNote || "").replace(/\n/g, " ") || "-"}</div>,
+<strong>{item.plannedQuantity}</strong>,
+<><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <Badge className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</Badge>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></>,
+<><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></>,
+<div className={cx(styles["operator-cell"])}>{item.operatorName}</div>,
+<>自主领取</>,
+<>{item.actualStartAt ? new Date(item.actualStartAt).toLocaleString("zh-CN") : "-"}</>,
+<>{item.actualEndAt ? new Date(item.actualEndAt).toLocaleString("zh-CN") : "-"}</>,
+<>{item.claimedAt ? new Date(item.claimedAt).toLocaleString("zh-CN") : "-"}</>,
+<>{editingId === item.id ? (<div className={cx(styles["edit-cell"])}>
+                  <NumericInput  min="0" step="0.1" value={String(editingHours)} useGrouping={false} onValueCommit={(value) => setEditingHours(value)} onDraftChange={(value) => setEditingHours(value)} />
+                </div>) : (<span className={cx(styles["hours-value"])}>{item.durationHours.toFixed(2)} 小时</span>)}</>,
+<>{editingId === item.id ? (<div className={cx(styles["edit-actions"])}>
+                  <Button aria-label={"确认"} variant="primary" className={cx(styles["table-action"], styles["confirm-btn"])} onClick={() => handleSaveHours(item)}><Check /></Button>
+                  <Button aria-label={"关闭"} variant="ghost" className={cx(styles["table-action"], styles["cancel-btn"])} onClick={handleCancelEdit}><X /></Button>
+                </div>) : (<Button variant="ghost" className={cx(styles["edit-btn"])} onClick={() => handleEditHours(item)}><Edit3 />修改</Button>)}</> ] }));
+            })} emptyTitle={"没有匹配的报工记录。"} />
       </div>
-      <div className={cx(styles["reports-pagination"])}>
-        <span>共 {total} 条记录，本页 {reports.length} 条</span>
-        <div className={cx(styles["pagination-buttons"])}>
-          <select className={cx(styles["pagination-size"])} value={pageSize} onChange={(e) => handlePageSizeChange(e.target.value)}>
-            <option value={20}>20 条/页</option>
-            <option value={50}>50 条/页</option>
-            <option value={100}>100 条/页</option>
-          </select>
-          <button className={cx(styles["pagination-btn"])} disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>上一页</button>
-          <span className={cx(styles["pagination-current"])}>第 {page} / {totalPages} 页</span>
-          <button className={cx(styles["pagination-btn"])} disabled={!hasMore} onClick={() => setPage((current) => current + 1)}>下一页</button>
-        </div>
-      </div>
+      <Pagination totalItems={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => handlePageSizeChange(String(size))} pageSizeOptions={[20, 50, 100]} />
     </section>
   </>);
 }

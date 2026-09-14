@@ -1,3 +1,4 @@
+import { useConfirmation } from "@/components/ui/ConfirmationProvider";
 import { useEffect, useState } from "react";
 import { getOperationTimes } from "@/api/http/laborDataClient";
 import { getErrorMessage } from "@/utils/errors";
@@ -13,6 +14,8 @@ import pageStyles from "./ClaimOperationsPage.module.less";
 const styles = { ...pageStyles, ...sharedStyles };
 
 export function ClaimOperationsPage() {
+  const confirm = useConfirmation();
+  const [permissionMessage, setPermissionMessage] = useState("");
   const {
     actionLoading, claimLoading, claimProducts, claimProductsPagination, claimParts, claimOperations, recentClaimOperations, error,
     searchClaimableProducts, loadRecentClaimableOperations, loadClaimableParts, loadClaimableOperations, claimOperation, loadAssignments, clearError,
@@ -60,7 +63,7 @@ export function ClaimOperationsPage() {
     try {
       await loadAssignments();
       const assignments = useWorkReportStore.getState().assignments;
-      if (shouldConfirmRepeatedClaim(assignments, claimedOperation) && !window.confirm("之前已领取过该工序，是否再次领取？")) return;
+      if (shouldConfirmRepeatedClaim(assignments, claimedOperation) && !await confirm("之前已领取过该工序，是否再次领取？")) return;
       await claimOperation(claimedOperation.id, { startTime: startAt, endTime: endAt, quantity });
       setClaimedOperation(null);
       await loadRecentClaimableOperations();
@@ -70,7 +73,7 @@ export function ClaimOperationsPage() {
       if (status === 403 && message.includes("请联系管理员分配权限")) {
         clearError();
         setClaimedOperation(null);
-        window.alert(message);
+        setPermissionMessage(message);
       } else {
         console.error("Failed to claim operation:", err);
       }
@@ -84,6 +87,7 @@ export function ClaimOperationsPage() {
   };
 
   return <div className={cx(styles["standard-page"], styles["claim-page"])}>
+    {permissionMessage && <ErrorBanner message={permissionMessage} />}
     <PageHeader title="领取工序" subtitle="搜索产品编号或工单号，选择部件后领取自己的工序" />
     {error && <ErrorBanner message={error} retry={() => { clearError(); void loadRecentClaimableOperations(); }} />}
     <ClaimOperationsPanel loading={claimLoading || actionLoading} products={claimProducts} productPagination={claimProductsPagination} parts={claimParts} operations={claimOperations} recentOperations={recentClaimOperations} claimed={claimedOperation} startTime={startTime} endTime={endTime} timesLoading={timesLoading} onSearch={searchClaimableProducts} onLoadRecent={loadRecentClaimableOperations} onLoadParts={loadClaimableParts} onLoadOperations={loadClaimableOperations} onClaim={(operationId) => { const op = claimOperations.find((o: ClaimableOperation) => o.id === operationId) || recentClaimOperations.find((o: ClaimableOperation) => o.id === operationId); if (op) setClaimedOperation(op); }} onConfirmClaim={handleConfirmClaim} onCancelClaim={handleCancelClaim} />

@@ -1,14 +1,15 @@
-import { useState, type ReactNode } from "react";
-import { CircleAlert, X } from "lucide-react";
+import { Alert, Badge, Button, ModalShell, PageHeader as PublicPageHeader, RecoverableAsyncState } from "@jc-times/business-ui";
+import { useId, useState, type ReactNode } from "react";
 import { statusLabel, type OperationAssignment } from "@/domain/work-report";
 import { cx } from "./mobileUtils";
 import styles from "./mobileShared.module.less";
 
-export function LoadingState() { return <div className={styles["page-state"]}><span className="spinner" /><p>正在加载报工数据...</p></div>; }
-export function ErrorBanner({ message, retry }: { message: string; retry?: () => void }) { return <div className={styles["error-banner"]}><CircleAlert /><span>{message}</span>{retry && <button onClick={retry}>重试</button>}</div>; }
+export function LoadingState() { return <div className={styles["page-state"]}><RecoverableAsyncState phase="loading" errorTitle="加载失败" loadingTitle="正在加载报工数据..." /></div>; }
+export function ErrorBanner({ message, retry }: { message: string; retry?: () => void }) { return <Alert tone="danger" className={styles["error-banner"]} description={message} action={retry && <Button variant="ghost" onClick={retry}>重试</Button>} />; }
 
 export function StatusPill({ status }: { status: OperationAssignment["status"] }) {
-  return <span className={cx(styles["status-pill"], styles[`status-${status}`])}><span />{statusLabel[status]}</span>;
+  const tone = status === "paused" ? "warning" : status === "assigned" ? "info" : status === "exception" || status === "cancelled" ? "danger" : "success";
+  return <Badge tone={tone} className={cx(styles["status-pill"], styles[`status-${status}`])}><span />{statusLabel[status]}</Badge>;
 }
 
 export function AvatarCircle({ src, name, className }: { src?: string | null; name: string; className: string }) {
@@ -20,14 +21,12 @@ export function AvatarCircle({ src, name, className }: { src?: string | null; na
   return <div className={className}>{avatarText}</div>;
 }
 
-export function BottomSheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
-  return <div className={styles["sheet-backdrop"]} role="presentation" onMouseDown={onClose}>
-    <section className={styles["bottom-sheet"]} role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
-      <div className={styles["sheet-handle"]} /><header><h2>{title}</h2><button className={styles["icon-button"]} onClick={onClose} aria-label="关闭"><X /></button></header>{children}
-    </section>
-  </div>;
+export function BottomSheet({ title, children, onClose, footer, busy = false }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; busy?: boolean }) {
+  const titleId = useId();
+  return <ModalShell titleId={titleId} title={title} closeLabel="关闭" onClose={onClose}
+    closeDisabled={busy} panelClassName="work-report-sheet" backdropClassName="work-report-sheet-backdrop" footer={footer}>{children}</ModalShell>;
 }
 
 export function PageHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  return <header className={styles["page-header"]}><h1>{title}</h1><p>{subtitle}</p></header>;
+  return <PublicPageHeader className={styles["page-header"]} title={title} description={subtitle} />;
 }

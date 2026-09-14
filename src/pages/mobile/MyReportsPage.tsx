@@ -1,10 +1,11 @@
+import { Button } from "@jc-times/business-ui";
 import { useCallback } from "react";
 import { ArrowLeft, CalendarClock, CheckCircle2 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { workReportRepository } from "@/api/services/workReport.service";
 import { type ReportRecord } from "@/domain/work-report";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { LoadingState, PageHeader } from "./shared";
+import { LoadingState } from "./shared";
 import sharedStyles from "./mobileShared.module.less";
 import pageStyles from "./MyReportsPage.module.less";
 
@@ -37,10 +38,10 @@ export function MyReportsPage() {
 
   return <div className={styles["standard-page"]}>
     <header className={styles["page-header"]}>
-      <button className={styles["icon-button"]} onClick={() => navigate(-1)} aria-label="返回"><ArrowLeft /></button>
+      <Button variant="ghost" className={styles["icon-button"]} onClick={() => navigate(-1)} aria-label="返回"><ArrowLeft /></Button>
       <div style={{ flex: 1 }}><h1>我的领取记录</h1><p>{periodLabels[period]} · 共 {reports.length} 条</p></div>
     </header>
-    {loading ? <LoadingState /> : error ? <div className={styles["error-banner"]}><span>{error}</span><button onClick={() => void reload()}>重试</button></div> : reports.length === 0 ? <div className={styles["page-state"]}><CheckCircle2 style={{ width: 48, height: 48, color: "#cbd5e1" }} /><p>暂无领取记录</p></div> : <section className={styles["my-report-list"]}>
+    {loading ? <LoadingState /> : error ? <div className={styles["error-banner"]}><span>{error}</span><Button variant="ghost" onClick={() => void reload()}>重试</Button></div> : reports.length === 0 ? <div className={styles["page-state"]}><CheckCircle2 style={{ width: 48, height: 48, color: "#cbd5e1" }} /><p>暂无领取记录</p></div> : <section className={styles["my-report-list"]}>
       {reports.map((item) => (
         <article key={item.id} className={styles["my-report-card"]}>
           <div className={styles["my-report-header"]}>

@@ -1,3 +1,4 @@
+import { Button, buttonClassName } from "@jc-times/business-ui";
 import {
   AlertTriangle,
   BarChart3,
@@ -67,9 +68,9 @@ export default function AdminLayout() {
             <strong>薪发科技</strong>
             <span>报工管理后台</span>
           </div>
-          <button onClick={() => setOpen(false)}>
+          <Button aria-label={"关闭"} variant="ghost" onClick={() => setOpen(false)}>
             <X />
-          </button>
+          </Button>
         </header>
         <nav>
           {visibleItems.map(([to, , label, Icon]) => (
@@ -88,20 +89,20 @@ export default function AdminLayout() {
         </footer>
       </aside>
       <div className={styles["admin-content"]}>
-        <header className={styles["admin-topbar"]}>
-          <button className={styles["menu-button"]} onClick={() => setOpen(true)}>
+        <header className={styles["admin-topbar"]} aria-label="管理工具栏">
+          <Button aria-label={"打开菜单"} variant="ghost" className={styles["menu-button"]} onClick={() => setOpen(true)}>
             <Menu />
-          </button>
-          <div>
+          </Button>
+          <div className={styles["production-status"]}>
             <BarChart3 />
             <span>实时生产数据</span>
           </div>
           <div className={styles["topbar-actions"]}>
-            <a href={createXftSsoUrl("", token)}>进入薪福通</a>
-            <a href="/work/claim">打开移动端</a>
-            <button className={styles["logout-button"]} onClick={logout} title="退出登录">
+            <a className={buttonClassName({ variant: "outline" })} href={createXftSsoUrl("", token)}>进入薪福通</a>
+            <a className={buttonClassName({ variant: "outline" })} href="/work/claim">打开移动端</a>
+            <Button aria-label={"退出登录"} variant="ghost" className={styles["logout-button"]} onClick={logout} title="退出登录">
               <LogOut />
-            </button>
+            </Button>
           </div>
         </header>
         <main>

@@ -1,0 +1,51 @@
+/* The application owns its brand; public components consume semantic tokens. */
+:root {
+  --ui-primary: var(--blue-700);
+  --ui-primary-hover: var(--navy-900);
+  --ui-primary-soft: var(--blue-50);
+  --ui-text: var(--ink);
+  --ui-muted: var(--muted);
+  --ui-border: var(--line);
+  --ui-border-strong: #cfd6df;
+  --ui-surface: var(--surface);
+  --ui-canvas: var(--canvas);
+  --ui-danger: var(--danger);
+  --ui-danger-soft: var(--danger-bg);
+  --ui-warning: var(--warning);
+  --ui-warning-soft: var(--warning-bg);
+  --ui-success: var(--success);
+  --ui-success-soft: var(--success-bg);
+  --ui-focus: rgb(20 95 209 / 28%);
+  --ui-radius: 10px;
+  --ui-radius-large: 13px;
+  --ui-shadow: 0 12px 32px rgb(20 43 75 / 16%);
+  --ui-control-height: 48px;
+  --ui-touch-height: 48px;
+}
+
+/* Card actions retain their content-driven height and existing page layout. */
+.ui-button { height: auto; white-space: normal; }
+.ui-button svg { flex-shrink: 0; }
+.work-report-table { width: 100%; min-width: 0; }
+.work-report-pagination { border: 0; padding: 0; margin: 12px 0; min-width: 0; }
+.work-report-metric { min-width: 0; }
+.work-report-dialog-content { padding: 16px 20px; }
+.work-report-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; padding: 16px 20px; }
+.work-report-sheet { --ui-control-height: 52px; --ui-touch-height: 52px; }
+.work-report-sheet .ui-modal-header h2 { font-size: 24px; }
+.work-report-sheet .ui-modal-content { padding: 20px; }
+.work-report-sheet .ui-modal-footer { padding: 16px 20px max(20px, env(safe-area-inset-bottom)); }
+
+/* Keep targets usable on phones and hybrid devices, independent of pointer mode. */
+:is(#root, .ui-modal) :is(.ui-button, .ui-input, .ui-select, .ui-textarea),
+#root .ui-tabs button,
+#root .ui-pagination :is(button, select) { min-height: max(44px, var(--ui-min-target-height, 0px)); }
+:is(#root, .ui-modal) .ui-date-input input,
+:is(#root, .ui-modal) .ui-combobox-control .ui-input { min-height: 48px; padding-right: 50px; }
+:is(#root, .ui-modal) .ui-date-trigger,
+:is(#root, .ui-modal) .ui-combobox-trigger { width: 44px; height: 44px; min-height: 44px; }
+
+@media (max-width: 600px) {
+  .work-report-sheet.ui-modal { width: 100%; max-height: 90dvh; height: auto; margin-top: auto; border-radius: 22px 22px 0 0; }
+  .work-report-sheet-backdrop.ui-modal-backdrop { padding: 0; align-items: end; }
+}
