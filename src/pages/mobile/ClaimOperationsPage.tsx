@@ -24,7 +24,6 @@ export function ClaimOperationsPage() {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [timesLoading, setTimesLoading] = useState(false);
-  useEffect(() => { void loadRecentClaimableOperations(); }, [loadRecentClaimableOperations]);
 
   useEffect(() => {
     if (!claimedOperation) {
@@ -61,12 +60,16 @@ export function ClaimOperationsPage() {
     if (!startAt || !endAt || new Date(startAt).getTime() > new Date(endAt).getTime()) return;
     if (!Number.isInteger(quantity) || quantity < 1) return;
     try {
-      await loadAssignments();
-      const assignments = useWorkReportStore.getState().assignments;
+      // 重复领取检查：优先用 store 中已有的 assignments，避免额外请求
+      let assignments = useWorkReportStore.getState().assignments;
+      if (!assignments || assignments.length === 0) {
+        await loadAssignments();
+        assignments = useWorkReportStore.getState().assignments;
+      }
       if (shouldConfirmRepeatedClaim(assignments, claimedOperation) && !await confirm("之前已领取过该工序，是否再次领取？")) return;
       await claimOperation(claimedOperation.id, { startTime: startAt, endTime: endAt, quantity });
       setClaimedOperation(null);
-      await loadRecentClaimableOperations();
+      // 领取后不自动加载"最近"列表，由用户主动点刷新（避免级联 50+ 次 API 阻塞）
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       const message = getErrorMessage(err);

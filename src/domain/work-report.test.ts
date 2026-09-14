@@ -124,7 +124,8 @@ describe("capability helpers", () => {
     expect(canAccessAdminRoute(leader, "orders")).toBe(true);
     expect(canAccessAdminRoute(leader, "import")).toBe(true);
     expect(canAccessAdminRoute(leader, "exceptions")).toBe(true);
-    expect(canAccessAdminRoute(leader, "assignments")).toBe(false);
+    // assignments 页面对所有已登录用户开放，不依赖特定权限
+    expect(canAccessAdminRoute(leader, "assignments")).toBe(true);
     expect(canAccessAdminRoute(leader, "permissions")).toBe(false);
     expect(canManagePermissions(leader)).toBe(false);
   });

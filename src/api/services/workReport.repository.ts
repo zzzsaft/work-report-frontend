@@ -170,6 +170,7 @@ export interface WorkReportRepository {
   addTeamMember(teamId: string, userId: string): Promise<void>;
   removeTeamMember(teamId: string, userId: string): Promise<void>;
   setWorkerTeam(userId: string, teamId: string | null): Promise<void>;
+  batchSetWorkerTeam(userIds: string[], teamId: string | null): Promise<{ count: number }>;
 
   // Team operation assignments
   listTeamOperations(teamId: string): Promise<TeamOperation[]>;

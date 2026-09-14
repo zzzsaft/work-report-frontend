@@ -19,7 +19,7 @@ import type {
   XftHoursRow,
   XftManualHoursDraft,
 } from "@/domain/work-report";
-import { canWorkerRemoveAssignment, getSessionElapsedSeconds, getSwitchableAssignmentsForDate, sortByNumericCode } from "@/domain/work-report";
+import { canWorkerRemoveAssignment, getSessionElapsedSeconds, getSwitchableAssignmentsForDate, sortByNumericCode, sortByPermissionAndCode } from "@/domain/work-report";
 
 const STORAGE_KEY = "work-report-mock-db-v3";
 const XFT_CONFIG_KEY = "work-report-mock-xft-config-v1";
@@ -516,7 +516,7 @@ export const mockWorkReportRepository: WorkReportRepository = {
     return { items: products.slice(start, start + pageSize), page, pageSize, total: products.length, hasMore: start + pageSize < products.length };
   },
   async getClaimableParts(productId) { await delay(); return sortByNumericCode(load().claimParts.filter((item) => item.productId === productId), (item) => item.partNo); },
-  async getClaimableOperations(partId) { await delay(); return sortByNumericCode(load().claimOperations.filter((item) => item.partId === partId), (item) => item.operationNo); },
+  async getClaimableOperations(partId) { await delay(); return sortByPermissionAndCode(load().claimOperations.filter((item) => item.partId === partId), (item) => item.operationNo); },
   async claimOperation(operationId, input) {
     await delay();
     const db = load();
@@ -1122,6 +1122,25 @@ export const mockWorkReportRepository: WorkReportRepository = {
       worker.teamName = undefined;
     }
     save(load());
+  },
+  async batchSetWorkerTeam(userIds, teamId) {
+    await delay();
+    let teamName: string | undefined;
+    if (teamId && teamId !== "team-unassigned") {
+      const team = (load().teams || []).find((t) => t.id === teamId);
+      if (!team) throw new Error("班组不存在");
+      teamName = team.name;
+    }
+    let count = 0;
+    for (const uid of userIds) {
+      const worker = mockWorkers.find((w) => w.id === uid);
+      if (worker) {
+        worker.teamName = teamName;
+        count++;
+      }
+    }
+    save(load());
+    return { count };
   },
 
   // Team operation assignments

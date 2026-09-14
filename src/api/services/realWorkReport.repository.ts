@@ -1,6 +1,6 @@
 import { workReportClient } from "@/api/http/workReportClient";
 import type { AdminAssignOperationInput, CompletionInput, PaginatedResult, WorkReportRepository } from "./workReport.repository";
-import { sortByNumericCode, type WorkOrder } from "@/domain/work-report";
+import { sortByNumericCode, sortByPermissionAndCode, type WorkOrder } from "@/domain/work-report";
 
 const normalizeOrders = (data: WorkOrder[] | { items?: WorkOrder[] }) => Array.isArray(data) ? data : data.items ?? [];
 const normalizePage = <T>(data: T[] | Partial<PaginatedResult<T>>, page: number, pageSize: number): PaginatedResult<T> => {
@@ -21,7 +21,7 @@ export const realWorkReportRepository: WorkReportRepository = {
   async completeAssignment(id, input: CompletionInput) { return (await workReportClient.post(`/assignments/${id}/complete`, input)).data; },
   async searchClaimableProducts(keyword, page, pageSize) { return normalizePage((await workReportClient.get("/claim/products", { params: { keyword, page, pageSize } })).data, page, pageSize); },
   async getClaimableParts(productId) { return sortByNumericCode((await workReportClient.get(`/claim/products/${productId}/parts`)).data, (item) => item.partNo); },
-  async getClaimableOperations(partId) { return sortByNumericCode((await workReportClient.get(`/claim/parts/${partId}/operations`)).data, (item) => item.operationNo); },
+  async getClaimableOperations(partId) { return sortByPermissionAndCode((await workReportClient.get(`/claim/parts/${partId}/operations`)).data, (item) => item.operationNo); },
   async claimOperation(operationId, input) { return (await workReportClient.post(`/claim/operations/${operationId}/claim`, input)).data; },
   async removeClaimedAssignment(assignmentId) { await workReportClient.delete(`/assignments/${assignmentId}/claim`); },
   async getStatistics(period) { return (await workReportClient.get("/statistics/me", { params: { period } })).data; },
@@ -91,6 +91,7 @@ export const realWorkReportRepository: WorkReportRepository = {
   async addTeamMember(teamId, userId) { await workReportClient.post(`/admin/teams/${encodeURIComponent(teamId)}/members`, { userId }); },
   async removeTeamMember(teamId, userId) { await workReportClient.delete(`/admin/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`); },
   async setWorkerTeam(userId, teamId) { await workReportClient.patch(`/admin/workers/${encodeURIComponent(userId)}/team`, { teamId }); },
+  async batchSetWorkerTeam(userIds, teamId) { return (await workReportClient.patch("/admin/workers/team", { userIds, teamId })).data; },
 
   // Team operation assignments
   async listTeamOperations(teamId) { return (await workReportClient.get(`/admin/teams/${encodeURIComponent(teamId)}/operations`)).data; },

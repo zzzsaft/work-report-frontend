@@ -485,6 +485,25 @@ export function sortByNumericCode<T>(items: T[], getCode: (item: T) => string | 
   });
 }
 
+// 权限优先排序：有权限的排前面，同权限组内按编号数字排序
+// hasPermission 为 undefined 视为有权限（权限未开启时所有项都可领取）
+export function sortByPermissionAndCode<T extends { hasPermission?: boolean }>(
+  items: T[],
+  getCode: (item: T) => string | undefined | null
+) {
+  return [...items].sort((left, right) => {
+    const leftPerm = left.hasPermission !== false;
+    const rightPerm = right.hasPermission !== false;
+    if (leftPerm !== rightPerm) return leftPerm ? -1 : 1;
+    const leftCode = parseNumericCode(getCode(left));
+    const rightCode = parseNumericCode(getCode(right));
+    if (leftCode === null && rightCode === null) return 0;
+    if (leftCode === null) return 1;
+    if (rightCode === null) return -1;
+    return leftCode - rightCode;
+  });
+}
+
 export function getSessionElapsedSeconds(session?: WorkSession, now = Date.now()) {
   if (!session) return 0;
   const currentRun =

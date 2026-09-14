@@ -92,6 +92,18 @@ export function useTeams() {
     }
   };
 
+  const batchSetWorkerTeam = async (userIds: string[], teamId: string | null) => {
+    try {
+      const result = await workReportRepository.batchSetWorkerTeam(userIds, teamId);
+      const targetName = teamId ? "" : "未分配班组";
+      setMessage(`成功分配 ${result.count} 人${targetName ? "到" + targetName : ""}`);
+      await Promise.all([reload(), selectedTeamId ? selectTeam(selectedTeamId) : Promise.resolve()]);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "批量分配失败");
+      throw err;
+    }
+  };
+
   return {
     teams,
     loading,
@@ -112,6 +124,7 @@ export function useTeams() {
     updateTeam,
     deleteTeam,
     addMember,
-    removeMember
+    removeMember,
+    batchSetWorkerTeam
   };
 }

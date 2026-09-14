@@ -35,7 +35,8 @@ export default function AssignmentAdminPage() {
     updateTeam,
     deleteTeam,
     addMember,
-    removeMember
+    removeMember,
+    batchSetWorkerTeam
   } = useTeams();
 
   const selectedTeam = teams.find((t) => t.id === selectedTeamId) || null;
@@ -111,6 +112,7 @@ export default function AssignmentAdminPage() {
             }}
             onAddMember={addMember}
             onRemoveMember={removeMember}
+            onBatchAssign={batchSetWorkerTeam}
           /></RovingTabPanel>
         ) : (
           <RovingTabPanel groupId="team-settings" value="operations"><TeamOperationsTab
@@ -151,7 +153,8 @@ function TeamManagementTab({
   onEditClick,
   onDeleteClick,
   onAddMember,
-  onRemoveMember
+  onRemoveMember,
+  onBatchAssign
 }: {
   teams: TeamInfo[];
   loading: boolean;
@@ -164,12 +167,54 @@ function TeamManagementTab({
   onDeleteClick: (team: TeamInfo) => void;
   onAddMember: (teamId: string, userId: string) => Promise<void>;
   onRemoveMember: (teamId: string, userId: string) => Promise<void>;
+  onBatchAssign: (userIds: string[], teamId: string | null) => Promise<void>;
 }) {
+  const confirm = useConfirmation();
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const [memberKeyword, setMemberKeyword] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<TeamMember[]>([]);
   const [focusedTeamId, setFocusedTeamId] = useState<string | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  const [batchTargetTeamId, setBatchTargetTeamId] = useState<string>("");
+
+  // 切换班组时清空选择
+  useEffect(() => {
+    setSelectedMemberIds(new Set());
+    setBatchTargetTeamId("");
+  }, [selectedTeamId]);
+
+  const toggleMemberSelect = (memberId: string) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedMemberIds.size === members.length) {
+      setSelectedMemberIds(new Set());
+    } else {
+      setSelectedMemberIds(new Set(members.map((m) => m.id)));
+    }
+  };
+
+  const handleBatchAssign = async () => {
+    if (selectedMemberIds.size === 0) return;
+    const targetId = batchTargetTeamId === "__unassigned__" ? null : batchTargetTeamId;
+    const targetName = targetId === null ? "未分配班组" : teams.find((t) => t.id === targetId)?.name ?? "";
+    if (!targetName) return;
+    if (!(await confirm(`确定将 ${selectedMemberIds.size} 人分配到"${targetName}"吗？`))) return;
+    try {
+      await onBatchAssign([...selectedMemberIds], targetId);
+      setSelectedMemberIds(new Set());
+      setBatchTargetTeamId("");
+    } catch {
+      /* handled by parent */
+    }
+  };
 
   const handleRowClick = (teamId: string) => {
     if (focusedTeamId === teamId) {
@@ -297,16 +342,50 @@ function TeamManagementTab({
             </Button>
           </div>
 
+          {selectedMemberIds.size > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "8px 12px", background: "#f0f4ff", borderRadius: 6 }}>
+              <span style={{ fontSize: 13, color: "#4a6cf7" }}>已选择 {selectedMemberIds.size} 人</span>
+              <SelectInput
+                value={batchTargetTeamId}
+                onChange={(e) => setBatchTargetTeamId(e.target.value)}
+                style={{ width: 180 }}
+              >
+                <option value="">选择目标班组...</option>
+                {teams.filter((t) => t.id !== "team-unassigned").map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+                <option value="__unassigned__">未分配班组</option>
+              </SelectInput>
+              <Button
+                variant="primary"
+                className={cx(styles["btn-primary"])}
+                disabled={!batchTargetTeamId}
+                onClick={() => { void handleBatchAssign(); }}
+              >
+                批量分配
+              </Button>
+              <Button variant="ghost" className={cx(styles["btn-secondary"])} onClick={() => { setSelectedMemberIds(new Set()); setBatchTargetTeamId(""); }}>
+                取消
+              </Button>
+            </div>
+          )}
+
           {membersLoading ? (
             <LoadingTable />
           ) : (
             <div className={cx(styles["table-wrap"])}>
-              <ReportTable  columns={[{ title: "工号" },
+              <ReportTable columns={[{ title: <><Checkbox aria-label="全选" label={null} checked={members.length > 0 && selectedMemberIds.size === members.length} onChange={toggleSelectAll} /></>, width: 40 },
+{ title: "工号" },
 { title: "姓名" },
 { title: "姓名首字母" },
 { title: "班组" },
 { title: "操作" }]} rows={members.map((member) => (
-                    ({ id: String(member.id), cells: [<>{member.employeeNo || "—"}</>,
+                    ({ id: String(member.id), cells: [<><Checkbox aria-label="选择"
+                      label={null}
+                      checked={selectedMemberIds.has(member.id)}
+                      onChange={() => toggleMemberSelect(member.id)}
+                    /></>,
+<>{member.employeeNo || "—"}</>,
 <><strong>{member.name}</strong></>,
 <>{member.nameInitials || "—"}</>,
 <>{member.teamName || "—"}</>,
