@@ -78,6 +78,9 @@ export interface OperationAssignment {
   operationCode: string;
   operationName: string;
   operationNote: string;
+  ylpartnum?: string;
+  yldescription?: string;
+  mfgcomment?: string;
   plannedQuantity: number;
   plannedStart: string;
   plannedEnd: string;
@@ -198,6 +201,9 @@ export interface ClaimableOperation {
   operationCode: string;
   operationName: string;
   operationNote: string;
+  ylpartnum?: string;
+  yldescription?: string;
+  mfgcomment?: string;
   plannedQuantity: number;
   plannedStart?: string;
   estimatedHours: number;
@@ -284,6 +290,7 @@ export interface ReportRecord {
   id: string;
   orderNo: string;
   company?: string;
+  productCode: string;
   productName: string;
   partNo: string;
   partCode: string;
@@ -291,6 +298,9 @@ export interface ReportRecord {
   operationCode: string;
   operationName: string;
   operationNote: string;
+  ylpartnum: string;
+  yldescription: string;
+  mfgcomment: string;
   operatorName: string;
   status: OperationStatus;
   plannedQuantity: number;

@@ -7,7 +7,7 @@ import { allocationMethodLabel, formatAllocationBasisHours, formatAllocationRati
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { AdminError, AdminHeader, LoadingTable } from "./adminShared";
 import { cx } from "./adminUtils";
-import { loadReportsForCsvExport, escapeCsvField } from "./reportExport";
+import { loadReportsForCsvExport, escapeCsvField, escapeCsvTextField } from "./reportExport";
 import { companyOptions, type CompanyFilter } from "./types";
 import styles from "./AdminPages.module.less";
 
@@ -97,17 +97,20 @@ export default function ReportsPage() {
     setMessage("");
     try {
       const exportReports = await loadReportsForCsvExport(workReportRepository, reportFilters, total);
-      const headers = ["工单", "产品名称", "产品编号", "部件序号", "部件号", "部件名称", "工序号", "工序名称", "工艺内容", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
+      const headers = ["工单", "产品名称", "产品编号", "部件序号", "部件号", "部件名称", "工序号", "工序名称", "工艺内容", "原料编号", "原料描述", "原料备注", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
       const rows = exportReports.map((item) => [
-        escapeCsvField(item.orderNo),
+        escapeCsvTextField(item.orderNo),
         escapeCsvField(item.productName),
-        "",
-        escapeCsvField(item.partNo),
-        escapeCsvField(item.partCode),
+        escapeCsvTextField(item.productCode),
+        escapeCsvTextField(item.partNo),
+        escapeCsvTextField(item.partCode),
         escapeCsvField(item.partName),
-        escapeCsvField(item.operationCode),
+        escapeCsvTextField(item.operationCode),
         escapeCsvField(item.operationName),
         escapeCsvField(item.operationNote || ""),
+        escapeCsvTextField(item.ylpartnum || ""),
+        escapeCsvField(item.yldescription || ""),
+        escapeCsvField(item.mfgcomment || ""),
         escapeCsvField(item.plannedQuantity),
         escapeCsvField(formatHours(getAllocatedHours(item))),
         escapeCsvField(formatHours(getOriginalEstimatedHours(item))),
@@ -195,6 +198,9 @@ export default function ReportsPage() {
 { title: "部件", width: 110 },
 { title: "工序", width: 120 },
 { title: "工艺内容", width: 140 },
+{ title: "原料编号", width: 100 },
+{ title: "原料描述", width: 140 },
+{ title: "原料备注", width: 140 },
 { title: "数量", width: 70 },
 { title: "分摊工时", width: 100 },
 { title: "原工时", width: 80 },
@@ -208,11 +214,14 @@ export default function ReportsPage() {
               const allocation = item.hourAllocation;
               const allocationTitle = allocation ? `工时分摊说明\n${hourAllocationTooltip}\n分摊方式：${allocationMethodLabel(allocation.allocationMethod)}\n分摊比例：${formatAllocationRatio(allocation.allocationRatio)}\n实际时长：${formatAllocationBasisHours(allocation.allocationBasisSeconds)}\n参与人数：${allocation.allocationParticipantCount ?? "-"}${allocation.allocationApplied === false ? `\n${hourAllocationFallbackText}` : ""}` : undefined;
               return (({ id: String(item.id), cells: [<><strong>{item.orderNo}</strong></>,
-<><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.partCode}</span></div></>,
+<><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.productCode}</span></div></>,
 <><strong>{item.partNo}</strong></>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></>,
 <div className={cx(styles["operation-note-cell"])} title={(item.operationNote || "").replace(/\n/g, " ")}>{(item.operationNote || "").replace(/\n/g, " ") || "-"}</div>,
+<div className={cx(styles["operation-note-cell"])} title={(item.ylpartnum || "").replace(/\n/g, " ")}>{item.ylpartnum || "-"}</div>,
+<div className={cx(styles["operation-note-cell"])} title={(item.yldescription || "").replace(/\n/g, " ")}>{item.yldescription || "-"}</div>,
+<div className={cx(styles["operation-note-cell"])} title={(item.mfgcomment || "").replace(/\n/g, " ")}>{item.mfgcomment || "-"}</div>,
 <strong>{item.plannedQuantity}</strong>,
 <><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <Badge className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</Badge>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></>,

@@ -11,6 +11,15 @@ export function escapeCsvField(value: string | number): string {
   return str;
 }
 
+/**
+ * 对编码类字段（如原料编号、部件序号、工序号等）前置制表符，
+ * 强制 Excel/WPS 打开 CSV 时按文本处理，避免前导零丢失或长数字显示为科学计数法。
+ */
+export function escapeCsvTextField(value: string | number): string {
+  const escaped = escapeCsvField(value);
+  return `\t${escaped}`;
+}
+
 export async function loadReportsForCsvExport(
   repository: Pick<WorkReportRepository, "getReports">,
   filters: ReportFilters,

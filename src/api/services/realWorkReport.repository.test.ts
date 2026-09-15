@@ -18,6 +18,7 @@ const order = (id: string): WorkOrder => ({
 const report = (id: string): ReportRecord => ({
   id,
   orderNo: `WO-${id}`,
+  productCode: "CP-001",
   productName: "产品",
   partNo: "01",
   partCode: "P-1",
@@ -25,6 +26,9 @@ const report = (id: string): ReportRecord => ({
   operationCode: "OP-1",
   operationName: "工序",
   operationNote: "工艺说明。",
+  ylpartnum: "YL-001",
+  yldescription: "原料描述",
+  mfgcomment: "原料备注",
   operatorName: "张师傅",
   status: "completed",
   plannedQuantity: 10,
