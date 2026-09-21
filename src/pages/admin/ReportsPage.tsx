@@ -97,7 +97,7 @@ export default function ReportsPage() {
     setMessage("");
     try {
       const exportReports = await loadReportsForCsvExport(workReportRepository, reportFilters, total);
-      const headers = ["工单", "产品名称", "产品编号", "部件序号", "部件号", "部件名称", "工序号", "工序名称", "工艺内容", "原料编号", "原料描述", "原料备注", "数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
+      const headers = ["工单", "产品名称", "产品编号", "部件序号", "部件号", "部件名称", "工序号", "工序名称", "工艺内容", "原料编号", "原料描述", "原料备注", "需求数量", "完成数量", "分摊工时", "原工时", "领取人员", "来源", "开工时间", "完工时间", "领取时间", "实际工时"];
       const rows = exportReports.map((item) => [
         escapeCsvTextField(item.orderNo),
         escapeCsvField(item.productName),
@@ -111,7 +111,8 @@ export default function ReportsPage() {
         escapeCsvTextField(item.ylpartnum || ""),
         escapeCsvField(item.yldescription || ""),
         escapeCsvField(item.mfgcomment || ""),
-        escapeCsvField(item.plannedQuantity),
+        escapeCsvField(item.demandQuantity ?? item.plannedQuantity),
+        escapeCsvField(item.completedQuantity ?? item.plannedQuantity),
         escapeCsvField(formatHours(getAllocatedHours(item))),
         escapeCsvField(formatHours(getOriginalEstimatedHours(item))),
         escapeCsvField(item.operatorName),
@@ -201,7 +202,8 @@ export default function ReportsPage() {
 { title: "原料编号", width: 100 },
 { title: "原料描述", width: 140 },
 { title: "原料备注", width: 140 },
-{ title: "数量", width: 70 },
+{ title: "需求数量", width: 80 },
+{ title: "完成数量", width: 80 },
 { title: "分摊工时", width: 100 },
 { title: "原工时", width: 80 },
 { title: "领取人员", width: 80 },
@@ -222,7 +224,8 @@ export default function ReportsPage() {
 <div className={cx(styles["operation-note-cell"])} title={(item.ylpartnum || "").replace(/\n/g, " ")}>{item.ylpartnum || "-"}</div>,
 <div className={cx(styles["operation-note-cell"])} title={(item.yldescription || "").replace(/\n/g, " ")}>{item.yldescription || "-"}</div>,
 <div className={cx(styles["operation-note-cell"])} title={(item.mfgcomment || "").replace(/\n/g, " ")}>{item.mfgcomment || "-"}</div>,
-<strong>{item.plannedQuantity}</strong>,
+<strong>{item.demandQuantity ?? item.plannedQuantity}</strong>,
+<strong>{item.completedQuantity ?? item.plannedQuantity}</strong>,
 <><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <Badge className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</Badge>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{formatHours(getOriginalEstimatedHours(item))} 小时</strong><span>原标准工时</span></div></>,
 <div className={cx(styles["operator-cell"])}>{item.operatorName}</div>,

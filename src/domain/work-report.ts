@@ -304,6 +304,8 @@ export interface ReportRecord {
   operatorName: string;
   status: OperationStatus;
   plannedQuantity: number;
+  demandQuantity?: number;
+  completedQuantity?: number;
   claimedAt: string | undefined;
   estimatedHours: number;
   allocatedHours?: number;
