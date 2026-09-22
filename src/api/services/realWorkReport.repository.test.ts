@@ -29,6 +29,8 @@ const report = (id: string): ReportRecord => ({
   ylpartnum: "YL-001",
   yldescription: "原料描述",
   mfgcomment: "原料备注",
+  cpNum: "CP-001",
+  cpDes: "原产品描述",
   operatorName: "张师傅",
   status: "completed",
   plannedQuantity: 10,
