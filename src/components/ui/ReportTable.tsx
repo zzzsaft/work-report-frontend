@@ -45,7 +45,7 @@ export function ReportTable({ columns, rows, emptyTitle = "暂无数据", classN
       muiTablePaperProps: { elevation: 0 },
       muiTableHeadCellProps: { sx: { fontFamily: "inherit", fontWeight: 700 } },
       muiTableBodyCellProps: { sx: { fontFamily: "inherit" } },
-      muiTableContainerProps: { sx: { maxHeight: "none" } },
+      muiTableContainerProps: { sx: { maxHeight: "calc(100vh - 320px)", minHeight: 360 } },
       renderEmptyRowsFallback: () => <p style={{ padding: 20, color: "var(--muted)" }}>{emptyTitle}</p>,
     }} />
   </div>;

@@ -194,18 +194,16 @@ export default function ReportsPage() {
           <Button variant="ghost" className={cx(styles["filter-reset-btn"])} onClick={handleResetFilters}>重置</Button>
         </div>
       </div>
-      <div className={cx(styles["table-wrap"])}>
-        <ReportTable className={cx(styles["reports-table"])} columns={[{ title: "工单", width: 100 },
+      <div className={cx(styles["table-wrap"], styles["reports-table-wrap"])}>
+        <ReportTable className={cx(styles["reports-table"])} columns={[{ title: "原产品", width: 200 },
+{ title: "工单", width: 100 },
 { title: "产品", width: 110 },
 { title: "部件序号", width: 60 },
 { title: "部件", width: 110 },
+{ title: "原料", width: 200 },
+{ title: "原料备注", width: 140 },
 { title: "工序", width: 120 },
 { title: "工艺内容", width: 140 },
-{ title: "原料编号", width: 100 },
-{ title: "原料描述", width: 140 },
-{ title: "原料备注", width: 140 },
-{ title: "原产品编号", width: 100 },
-{ title: "原产品描述", width: 140 },
 { title: "需求数量", width: 80 },
 { title: "完成数量", width: 80 },
 { title: "分摊工时", width: 100 },
@@ -219,17 +217,15 @@ export default function ReportsPage() {
 { title: "操作", width: 80 }]} rows={reports.map((item) => {
               const allocation = item.hourAllocation;
               const allocationTitle = allocation ? `工时分摊说明\n${hourAllocationTooltip}\n分摊方式：${allocationMethodLabel(allocation.allocationMethod)}\n分摊比例：${formatAllocationRatio(allocation.allocationRatio)}\n实际时长：${formatAllocationBasisHours(allocation.allocationBasisSeconds)}\n参与人数：${allocation.allocationParticipantCount ?? "-"}${allocation.allocationApplied === false ? `\n${hourAllocationFallbackText}` : ""}` : undefined;
-              return (({ id: String(item.id), cells: [<><strong>{item.orderNo}</strong></>,
-<><div className={cx(styles["cell-with-sub"])}><strong>{item.productName}</strong><span>{item.productCode}</span></div></>,
+              return (({ id: String(item.id), cells: [<div className={cx(styles["cell-with-sub"])} title={[item.cpNum, item.cpDes].filter(Boolean).join(" / ")}><strong>{item.cpNum || "-"}</strong><span>{item.cpDes || "-"}</span></div>,
+<><strong>{item.orderNo}</strong></>,
+<><div className={cx(styles["cell-with-sub"])}><strong>{item.productCode}</strong><span>{item.productName}</span></div></>,
 <><strong>{item.partNo}</strong></>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{item.partCode}</strong><span>{item.partName}</span></div></>,
+<div className={cx(styles["cell-with-sub"])} title={[item.ylpartnum, item.yldescription].filter(Boolean).join(" / ")}><strong>{item.ylpartnum || "-"}</strong><span>{item.yldescription || "-"}</span></div>,
+<div className={cx(styles["operation-note-cell"])} title={(item.mfgcomment || "").replace(/\n/g, " ")}>{item.mfgcomment || "-"}</div>,
 <><div className={cx(styles["cell-with-sub"])}><strong>{item.operationCode}</strong><span>{item.operationName}</span></div></>,
 <div className={cx(styles["operation-note-cell"])} title={(item.operationNote || "").replace(/\n/g, " ")}>{(item.operationNote || "").replace(/\n/g, " ") || "-"}</div>,
-<div className={cx(styles["operation-note-cell"])} title={(item.ylpartnum || "").replace(/\n/g, " ")}>{item.ylpartnum || "-"}</div>,
-<div className={cx(styles["operation-note-cell"])} title={(item.yldescription || "").replace(/\n/g, " ")}>{item.yldescription || "-"}</div>,
-<div className={cx(styles["operation-note-cell"])} title={(item.mfgcomment || "").replace(/\n/g, " ")}>{item.mfgcomment || "-"}</div>,
-<div className={cx(styles["operation-note-cell"])} title={(item.cpNum || "").replace(/\n/g, " ")}>{item.cpNum || "-"}</div>,
-<div className={cx(styles["operation-note-cell"])} title={(item.cpDes || "").replace(/\n/g, " ")}>{item.cpDes || "-"}</div>,
 <strong>{item.demandQuantity ?? item.plannedQuantity}</strong>,
 <strong>{item.completedQuantity ?? item.plannedQuantity}</strong>,
 <><div className={cx(styles["cell-with-sub"], styles["hours-allocation-cell"])}><strong>{formatHours(getAllocatedHours(item))} 小时</strong>{allocation?.allocationTemporary && <Badge className={cx(styles["allocation-tag"])} title={allocationTitle}>临时分摊</Badge>}{allocation?.allocationApplied === false && <em title={hourAllocationFallbackText}>{hourAllocationFallbackText}</em>}</div></>,

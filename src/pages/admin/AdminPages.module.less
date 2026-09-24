@@ -59,7 +59,7 @@
 
 .menu-button { display: none; }
 
-.admin-content > main { max-width: 1500px; margin: 0 auto; padding: 28px 30px 50px; }
+.admin-content > main { margin: 0 auto; padding: 28px 30px 50px; }
 
 .admin-page-header { display: flex; min-height: 67px; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
 
@@ -627,10 +627,11 @@
 .reports-filter .filter-reset-btn { min-height: 36px; padding: 0 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;
   background: #fff; color: #64748b; cursor: pointer; }
 
-.table-wrap .reports-table { width: 100%; border-collapse: collapse; white-space: normal; table-layout: fixed; }
+.table-wrap .reports-table { width: 100%; }
 
 .table-wrap .reports-table th { padding: 10px 12px; text-align: left; font-size: 13px; font-weight: 600;
-  background: #f1f5f9; color: #475569; border-bottom: 2px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  background: #f1f5f9; color: #475569; border-bottom: 2px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: sticky; top: 0; z-index: 5; }
 
 .table-wrap .reports-table td { padding: 10px 12px; font-size: 13px;
   border-top: none; border-bottom: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; }
